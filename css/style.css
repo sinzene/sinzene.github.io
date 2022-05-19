@@ -1,0 +1,163 @@
+/* {
+    outline: 1px solid orange;
+}*/
+
+body {
+	font-family: Noto Sans, sans-serif;
+	background-color: #222222;
+}
+
+header {
+	background-color: #222222;
+	color: white;
+}
+
+main {
+	color: black;
+	background-color: #ffffff;
+}
+
+footer {
+	color: white;
+	background-color: #131313;
+}
+
+nav ul {
+	list-style: none;
+	display: flex;
+	padding-left: 0;
+	margin-left: 40px;
+	margin-right: 40px;
+}
+
+nav ul li {
+	margin-left: 34px;
+	margin-right: 34px;
+}
+
+.nav-left-block {
+	width: 240px;
+	justify-content: space-between;
+	padding-left: 125px;
+}
+
+.nav-right-block {
+	width: -30px;
+	justify-content: space-between;
+}
+
+nav {
+	display: flex;
+	justify-content: space-between;
+}
+
+.header-content {
+	display: flex;
+}
+
+.header-title {
+	padding-left: 125px;
+}
+
+.container {
+    width: 1040px;
+    margin: 0 auto;
+    padding: 0;
+}
+
+.column {
+	width: 440px;
+	margin-left: 40px;
+    margin-right: 40px;
+}
+
+.content-column {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; 
+    width: 440px;
+    margin-left: 40px;
+    margin-right: 40px;
+}
+
+.content {
+	display: flex;
+    flex-direction: row;
+}
+
+.advantages-items {
+	list-style: none;
+	display: flex;
+	justify-content: space-between;
+	padding-left: 0;
+}
+
+.footer-content {
+	display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.tail {
+	width: 180px;
+	margin-left: 40px;
+    margin-right: 40px;
+}
+
+.advantages {
+	background-color: #131313;
+	color: white;
+}
+
+.tail h3 {
+	border-bottom: solid;
+	border-color: white;
+	padding: 1em;
+}
+
+.tail ul li {
+	list-style: none;
+	padding-left: 0;
+	padding-bottom: 12px;
+	padding-top: 7px;
+}
+
+.tail-left {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+
+.tail-left div {
+	display: flex;
+}
+
+.tail-left {
+	display: flex;
+	padding-top: 50px ;
+}
+
+.rec li {
+	position: relative;
+	list-style: none;
+}
+
+.rec li::before {
+	content: '';
+
+	width: 8px;
+	height: 8px;
+
+	position: absolute;
+	left: -40px;
+	top: 7px;
+
+	background-color: yellow;
+	border-radius: 50px;
+}
+
+.advantages-rosket-icon {
+	position: relative;
+
+	padding-top: 150px;
+}

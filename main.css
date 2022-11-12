@@ -19,6 +19,7 @@ body {
     transform: translate(-0%, -0%);
     border: none;
     background-color: white;
+    opacity: 0%;
 }
 
 .text-404 {

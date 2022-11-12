@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test</title>
+    <link rel="stylesheet" href="main.css">
+    <style>
+        body {
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <div class="click-box" onclick="changeColor()"></div>
+        <h1 id="text-id" class="text-test">Test</h1>
+    </div>
+
+    <script>
+        let ColorMode = 1;
+
+        function changeColor(){
+            ColorMode = ColorMode + 1;
+
+            if (ColorMode == 1){
+                document.getElementById("text-id").style.color = "black"
+            }
+
+            if (ColorMode == 2){
+                document.getElementById("text-id").style.color = "red"
+                ColorMode = 0;
+            }
+        }
+    </script>
+</body>
+</html>

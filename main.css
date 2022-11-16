@@ -27,12 +27,31 @@ body {
     transform: translate(-50%, -20%);
 }
 
+.krn-button {
+    position: absolute;
+    height: 50px;
+    width: 50px;
+    left: 100%;
+    top: 100%;
+    transform: translate(-100%, -100%);
+    border: none;
+    opacity: 0%;
+}
+
 .clock {
     position: absolute;
     font-size: 60px;
     top: 40%;
     left: 50%;
     transform: translate(-50%, -40%);
+}
+
+.krnl-div {
+    position: absolute;
+    left: 90%;
+    top: 60%;
+    opacity: 0;
+    transform: translate(-80%, -60%);
 }
 
 .click-box {
@@ -43,7 +62,6 @@ body {
     top: 0%;
     transform: translate(-0%, -0%);
     border: none;
-    background-color: white;
     opacity: 0%;
 }
 

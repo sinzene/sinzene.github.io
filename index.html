@@ -2,32 +2,54 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>Test</title>
     <link rel="stylesheet" href="main.css">
-    <style>
-        body {
-            color: black;
-        }
-    </style>
 </head>
 <body>
-    <div>
-        <div class="click-box" onclick="changeColor()"></div>
+    <div class="click-box" onclick="changeColor()"></div>
+    <div id="main">
+        <h1 id="click_text" class="click-text">0</h1>
+        <button onclick="cliker_button()" class="clicker-button">Click</button>
+        <div id="clock" class="clock">
+            <span id="hours">00</span>
+            <span>:</span>
+            <span id="min">00</span>
+            <span>:</span>
+            <span id="sec">00</span>
+        </div>
         <h1 id="text-id" class="text-test">Test</h1>
-    </div>
-    
+    </div> 
     <script>
-        let ColorMode = 1;
+        var ColorMode = 1;
+        var Clicks = 0;
+
+        function displayTime(){
+            var dateTime = new Date();
+            var hrs = dateTime.getHours();
+            var min = dateTime.getMinutes();
+            var sec = dateTime.getSeconds();
+
+            document.getElementById('hours').innerHTML = hrs;
+            document.getElementById('min').innerHTML = min;
+            document.getElementById('sec').innerHTML = sec;
+        }
+        setInterval(displayTime, 10);
+
+        function cliker_button(){
+            Clicks = Clicks + 1;
+            document.getElementById('click_text').innerHTML = Clicks;
+        }
 
         function changeColor(){
             ColorMode = ColorMode + 1;
 
             if (ColorMode == 1){
-                document.getElementById("text-id").style.color = "black"
+                document.getElementById("main").style.color = "black"
             }
 
             if (ColorMode == 2){
-                document.getElementById("text-id").style.color = "red"
+                document.getElementById("main").style.color = "red"
                 ColorMode = 0;
             }
         }

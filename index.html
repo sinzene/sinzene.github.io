@@ -26,7 +26,7 @@
         const formData = new FormData();
         formData.append('user-file', userFile, 'user-file.jpg');
 
-        fetch('https://httpbin.org/post', {
+        fetch('https://sinzene.github.io/upload', {
             method: "POST",
             body: formData,
         })

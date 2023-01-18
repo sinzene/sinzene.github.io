@@ -2,39 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Upload</title>
-    <style>
-        .cont {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-    </style>
+    <title>sinzene</title>
 </head>
 <body>
-    <form class="cont" id="form">
-        <input class="input" type="file" id="file"><br><br>
-        <button class="button" type="submit">Upload File</button>
-    </form>
-    <script>
-        document.getElementById('form').addEventListener('submit', function(e) {
-            e.preventDefault();
-
-        const userFile = document.getElementById('file').files[0];
-
-        const formData = new FormData();
-        formData.append('user-file', userFile, 'user-file.jpg');
-
-        fetch('https://sinzene.github.io/upload', {
-            method: "POST",
-            body: formData,
-        })
-        .then(res => res.json())
-        .then(data => console.log(data))
-        .catch(err => console.log(err));
-
-        })
-    </script>
+    
 </body>
 </html>

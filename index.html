@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Vopros Vsevyshnemu</title>
+    <style>
+        /* css */
+        body{
+            background-color: rgb(43, 43, 43);
+            color: rgb(255, 255, 255);
+            font-family: sans-serif;
+        }
+
+        .cont{
+            height: 350px;
+            width: 250px;
+            /* background-color: red; */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .answer_text{
+            display: flex;
+            justify-content: center;
+            font-size: 30px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: clip;
+        }
+
+        .input_menu{
+            width: 250px;
+            height: 110px;
+            font-size: 25px;
+            outline: none;
+        }
+        
+        .question_button{
+            width: 257px;
+            height: 40px;
+        }
+
+        .space{
+            /* background-color: green; */
+            height: 30px;
+        }
+    </style>
+
+<!-- fiveicon -->
+<link rel="icon" href="fiveicon.ico" sizes="any">
+
+</head>
+<body>
+    <!-- html -->
+    <div class="cont">
+        <h1 id="answer_text" class="answer_text">Ответ</h1>
+        <input id="input_menu" class="input_menu" type="text" spellcheck="false" placeholder="ВОПРОС....">
+        <div class="space"></div>
+        <button id="question_button_id" class="question_button">ЗАДАТЬ ВОПРОС ВСЕВЫШНЕМУ</button>
+    </div>
+</body>
+<script>
+    // script
+    var random_var = 0;
+    var question_button = document.getElementById("question_button_id");
+    var answer_text = document.getElementById("answer_text");
+    var input_menu = document.getElementById("input_menu");
+    var yes_sound = new Audio("YesSound.wav")
+    var no_sound = new Audio("NoSound.wav")
+    var click_sound = new Audio("ClickSound.mp3")
+
+    question_button.onclick = function(){
+        click_sound.play();
+        random_var = Math.floor(Math.random()*2)+1;
+
+        if(input_menu.value == ""){
+            answer_text.innerHTML = "Напишите текст";
+        }else{
+            if(random_var == 1){
+                answer_text.innerHTML = "Да";
+                yes_sound.play();
+            }else{
+                answer_text.innerHTML = "Нет";
+                no_sound.play();
+            }
+        }
+    }
+</script>
+</html>

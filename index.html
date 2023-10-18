@@ -5,6 +5,7 @@
     <title>Files</title>
     <style>
         body {
+            font-family: "Comic Sans MS", Comic Sans, cursive, sans-serif;
             background-color: rgb(47, 47, 47);
             display: flex;
             flex-direction: column;
@@ -14,7 +15,7 @@
         }
 
         button {
-            font-family: Comic Sans MS, Comic Sans, cursive;
+            font-family: "Comic Sans MS", Comic Sans, cursive, sans-serif;
             background-color: #ffffff;
             color: rgb(42, 42, 42);
             border: none;
@@ -29,10 +30,30 @@
         }
 
         p {
-            font-family: Comic Sans MS, Comic Sans, cursive;
+            font-family: "Comic Sans MS", Comic Sans, cursive, sans-serif;
             color: white;
             font-size: 35px;
             margin-bottom: 0px;
+        }
+
+        @media only screen and (max-width: 600px) {
+            body {
+                font-size: 16px;
+            }
+        
+            button {
+                padding: 8px 16px;
+            }
+        }
+
+        @media only screen and (max-width: 1200px) {
+            body {
+                font-size: 18px;
+            }
+        
+            button {
+                padding: 12px 24px;
+            }
         }
     </style>
 </head>
@@ -45,11 +66,11 @@
             <button>ms-quick-assist:</button>
         </a>
 
-        <a href="UadSol.exe" download="UadSol.exe">
+        <a href="path_to_your_file.pdf" download="your_file_name.pdf">
             <button>UadSol.exe</button>
         </a>
 
-        <a href="notepad.exe" download="notepad.exe">
+        <a href="path_to_your_file.pdf" download="your_file_name.pdf">
             <button>notepad.exe</button>
         </a>
 

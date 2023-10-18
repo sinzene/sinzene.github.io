@@ -1,35 +1,61 @@
-<!--чё смотришь а?-->
-<!DOCTYPE html>     <!--чё смотришь а?-->
-<html lang="en">    <!--чё смотришь а?-->
-<head>  <!--чё смотришь а?-->
-    <meta charset="UTF-8">  <!--чё смотришь а?-->
-    <title>sinzene</title>  <!--чё смотришь а?-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Files</title>
     <style>
-        body{
-            background-color: black;
+        body {
+            background-color: rgb(47, 47, 47);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        button {
+            font-family: Comic Sans MS, Comic Sans, cursive;
+            background-color: #ffffff;
+            color: rgb(42, 42, 42);
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            font-size: 16px;
+            margin: 12px 0;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        p {
+            font-family: Comic Sans MS, Comic Sans, cursive;
             color: white;
-            font-family: Gill Sans, sans-serif;
-            overflow: hidden;
-        }
-        h1 {
-            margin: 360px;
-            animation: infiniteRotate 2s linear infinite;
-            transform-origin: center;
-        }
-        @keyframes infiniteRotate {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
+            font-size: 35px;
+            margin-bottom: 0px;
         }
     </style>
 </head>
 <body>
-    <main>
-        <a href="cmd.exe" title="7-Zip.zip">7-Zip.zip</a>
-        <h1>Hi</h1>
-    </main>
+    <div>
+        <p>Files:</p>
+    </div>
+    <div>
+        <a href="ms-quick-assist:">
+            <button>ms-quick-assist:</button>
+        </a>
+
+        <a href="path_to_your_file.pdf" download="your_file_name.pdf">
+            <button>UadSol.exe</button>
+        </a>
+
+        <a href="path_to_your_file.pdf" download="your_file_name.pdf">
+            <button>notepad.exe</button>
+        </a>
+
+        <a href="path_to_your_file.pdf" download="your_file_name.pdf">
+            <button>VkPlayCloud.zip</button>
+        </a>
+    </div>
 </body>
 </html>

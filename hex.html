@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HexView — Large File Inspector</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f0d;
+    --surface: #111411;
+    --border: #1e2a1e;
+    --green: #39ff14;
+    --green2: #00c853;
+    --green-dim: #1a4a1a;
+    --green-glow: rgba(57,255,20,0.12);
+    --amber: #ffb300;
+    --text: #b8ffb0;
+    --text2: #557755;
+    --text3: #2e3d2e;
+    --row-h: 22px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:var(--bg); color:var(--text);
+    font-family:'Share Tech Mono',monospace;
+    height:100vh; overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  body::after {
+    content:''; position:fixed; inset:0;
+    background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);
+    pointer-events:none; z-index:9999;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    flex-shrink:0; display:flex; align-items:center; gap:12px;
+    padding:8px 16px; border-bottom:1px solid var(--border);
+    background:var(--surface); flex-wrap:wrap;
+  }
+  .logo {
+    font-family:'Orbitron',monospace; font-size:17px; font-weight:900;
+    color:var(--green); text-shadow:0 0 14px var(--green); letter-spacing:3px; white-space:nowrap;
+  }
+  .sep { width:1px; height:22px; background:var(--border); flex-shrink:0; }
+  .file-info { font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:280px; }
+  .file-info strong { color:var(--green2); }
+  .spacer { flex:1; }
+  .tb-btn {
+    background:transparent; border:1px solid var(--border); color:var(--text2);
+    font-family:'Share Tech Mono',monospace; font-size:11px; padding:5px 11px;
+    border-radius:3px; cursor:pointer; letter-spacing:1px; white-space:nowrap; transition:all .15s;
+  }
+  .tb-btn:hover { border-color:var(--green); color:var(--green); background:var(--green-glow); }
+  select.tb-btn { cursor:pointer; } option { background:#0d0f0d; }
+
+  /* STATS BAR */
+  .statsbar {
+    flex-shrink:0; display:flex; gap:18px; padding:5px 16px;
+    background:var(--bg); border-bottom:1px solid var(--border);
+    font-size:11px; color:var(--text2); flex-wrap:wrap;
+  }
+  .statsbar span strong { color:var(--green); }
+
+  /* SEARCH / GOTO */
+  .bar {
+    flex-shrink:0; display:none; align-items:center; gap:8px;
+    padding:7px 16px; border-bottom:1px solid var(--border); background:var(--surface);
+  }
+  .bar.open { display:flex; }
+  .bar-label { font-size:11px; color:var(--text2); letter-spacing:1px; white-space:nowrap; }
+  .bar-input {
+    flex:1; max-width:380px; background:var(--bg); border:1px solid var(--border);
+    color:var(--text); font-family:'Share Tech Mono',monospace; font-size:12px;
+    padding:5px 11px; border-radius:3px; outline:none; letter-spacing:1px;
+  }
+  .bar-input:focus { border-color:var(--green); }
+  .bar-input::placeholder { color:var(--text3); }
+  .bar-res { font-size:11px; color:var(--text2); min-width:90px; }
+
+  /* DROP ZONE */
+  .dropzone {
+    position:fixed; inset:0; z-index:100; background:var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; cursor:pointer;
+  }
+  .dropzone.hidden { display:none; }
+  .dropzone.drag { background:rgba(57,255,20,0.04); }
+  .dropzone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; }
+  .dz-border {
+    position:absolute; inset:20px; border:1px dashed var(--green-dim);
+    border-radius:8px; pointer-events:none; transition:border-color .2s;
+  }
+  .dropzone.drag .dz-border { border-color:var(--green); }
+  .dz-icon { font-size:52px; filter:drop-shadow(0 0 18px var(--green)); }
+  .dz-title {
+    font-family:'Orbitron',monospace; font-size:20px; font-weight:900;
+    color:var(--green); text-shadow:0 0 28px var(--green); letter-spacing:5px;
+  }
+  .dz-sub { font-size:12px; color:var(--text2); letter-spacing:1.5px; text-align:center; line-height:2.2; }
+  .dz-limit { font-size:11px; color:var(--text3); letter-spacing:1px; border:1px solid var(--border); padding:7px 18px; border-radius:3px; }
+
+  /* VIEWER */
+  .viewer { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+  .hex-header {
+    flex-shrink:0; display:grid; grid-template-columns:100px 1fr auto;
+    padding:5px 16px; background:var(--bg); border-bottom:1px solid var(--border);
+    font-size:11px; color:var(--text3); letter-spacing:2px; user-select:none;
+  }
+  .vscroll-wrap { flex:1; overflow:hidden; position:relative; }
+  .vscroll { position:absolute; inset:0; overflow-y:scroll; overflow-x:auto; }
+  .vscroll::-webkit-scrollbar { width:8px; }
+  .vscroll::-webkit-scrollbar-track { background:var(--bg); }
+  .vscroll::-webkit-scrollbar-thumb { background:var(--green-dim); border-radius:4px; }
+  .vscroll::-webkit-scrollbar-thumb:hover { background:var(--green2); }
+  /* spacer sets total scroll height; rows float absolutely over it */
+  .vscroll-inner { position:relative; }
+  .vscroll-rows  { position:absolute; top:0; left:0; right:0; }
+
+  /* ROW */
+  .hex-row {
+    display:grid; grid-template-columns:100px 1fr minmax(120px, auto);
+    height:var(--row-h); align-items:center;
+    border-bottom:1px solid rgba(30,42,30,0.4);
+    pointer-events:auto; transition:background .08s; white-space:nowrap; min-width:max-content;
+  }
+  .hex-row:hover { background:rgba(57,255,20,0.04); }
+  .row-addr { padding-left:16px; font-size:12px; color:var(--text2); letter-spacing:1px; user-select:none; }
+  .row-hex { padding:0 14px 0 6px; font-size:12.5px; letter-spacing:1.5px; display:flex; }
+  .hb {
+    display:inline-block; min-width:2ch; padding:0 2px; border-radius:2px;
+    cursor:pointer; transition:background .08s,color .08s;
+  }
+  .hb:hover { background:var(--green-dim); color:var(--green); text-shadow:0 0 6px var(--green); }
+  .hb.z  { color:var(--text3); }
+  .hb.ff { color:var(--amber); }
+  .hb.pr { color:#7dffb0; }
+  .hb.sel { background:var(--green)!important; color:#000!important; text-shadow:none!important; }
+  .hb.found { background:rgba(255,179,0,.22); color:var(--amber); }
+  .hb.found.sel { background:var(--amber)!important; color:#000!important; }
+  .hex-gap { display:inline-block; width:10px; flex-shrink:0; }
+  .row-ascii {
+    padding:0 16px 0 8px; font-size:12px; letter-spacing:2px;
+    color:var(--text2); border-left:1px solid var(--border);
+  }
+  .ac { cursor:pointer; }
+  .ac:hover { color:var(--green); }
+  .ac.sel { color:var(--green); text-shadow:0 0 8px var(--green); }
+  .ac.np { color:var(--text3); }
+
+  /* TOOLTIP */
+  .tooltip {
+    position:fixed; background:var(--bg); border:1px solid var(--green);
+    border-radius:4px; padding:7px 13px; font-size:11px; color:var(--green);
+    pointer-events:none; z-index:500; display:none;
+    box-shadow:0 0 18px rgba(57,255,20,.2); line-height:1.9; letter-spacing:.5px;
+  }
+
+  /* STATUS BAR */
+  .statusbar {
+    flex-shrink:0; display:flex; align-items:center; gap:16px;
+    padding:4px 16px; border-top:1px solid var(--border); background:var(--surface);
+    font-size:11px; color:var(--text2); letter-spacing:.5px;
+  }
+  .sel-info { color:var(--green); }
+  .blink { animation:blink 1.2s step-end infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+</style>
+</head>
+<body>
+
+<!-- DROP ZONE -->
+<div class="dropzone" id="dropzone">
+  <div class="dz-border"></div>
+  <input type="file" id="fileInput">
+  <div class="dz-icon">⬡</div>
+  <div class="dz-title">HEXVIEW</div>
+  <div class="dz-sub">
+    Drop any file here or click to browse<br>
+    Runs entirely in your browser — nothing is uploaded to any server
+  </div>
+  <div class="dz-limit">✓ No file size limit &nbsp;·&nbsp; Handles 10 GB+ &nbsp;·&nbsp; Zero server required</div>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">HEX<span style="color:var(--green2)">VIEW</span></div>
+  <div class="sep"></div>
+  <div class="file-info" id="fileInfo">No file loaded</div>
+  <div class="spacer"></div>
+  <label class="bar-label">COLS:</label>
+  <select class="tb-btn" id="colsSelect" onchange="changeCols()">
+    <option value="8">8</option>
+    <option value="16" selected>16</option>
+    <option value="32">32</option>
+  </select>
+  <button class="tb-btn" onclick="toggleBar('searchBar')">🔍 Search</button>
+  <button class="tb-btn" onclick="toggleBar('gotoBar')">↵ Goto</button>
+  <button class="tb-btn" onclick="exportVisible()">⬇ Export view</button>
+  <button class="tb-btn" onclick="document.getElementById('hiddenInput').click()">📂 Open</button>
+</div>
+<input type="file" id="hiddenInput" style="display:none">
+
+<!-- STATS BAR -->
+<div class="statsbar" id="statsBar">
+  <span>SIZE: <strong id="stSize">—</strong></span>
+  <span>ROWS: <strong id="stRows">—</strong></span>
+  <span>VIEW OFFSET: <strong id="stOff">—</strong></span>
+  <span>CACHE: <strong id="stCache">0</strong> chunks</span>
+</div>
+
+<!-- SEARCH BAR -->
+<div class="bar" id="searchBar">
+  <span class="bar-label">SEARCH:</span>
+  <input class="bar-input" id="searchInput" placeholder="Hex bytes (FF 4D 5A) or text string…" oninput="schedSearch()">
+  <button class="tb-btn" onclick="jumpMatch(-1)">◀ Prev</button>
+  <button class="tb-btn" onclick="jumpMatch(1)">Next ▶</button>
+  <span class="bar-res" id="searchRes"></span>
+  <button class="tb-btn" onclick="clearSearch()">✕</button>
+</div>
+
+<!-- GOTO BAR -->
+<div class="bar" id="gotoBar">
+  <span class="bar-label">GOTO OFFSET:</span>
+  <input class="bar-input" id="gotoInput" placeholder="0x1A2B3C or decimal 1000000" style="max-width:260px"
+    onkeydown="if(event.key==='Enter')doGoto()">
+  <button class="tb-btn" onclick="doGoto()">GO</button>
+  <button class="tb-btn" onclick="toggleBar('gotoBar')">✕</button>
+</div>
+
+<!-- VIEWER -->
+<div class="viewer" id="viewer">
+  <div class="hex-header">
+    <div>OFFSET</div>
+    <div id="hdrBytes"></div>
+    <div>ASCII</div>
+  </div>
+  <div class="vscroll-wrap">
+    <div class="vscroll" id="vscroll">
+      <div class="vscroll-inner" id="inner">
+        <div class="vscroll-rows" id="rows"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div class="statusbar">
+  <span class="sel-info" id="selInfo"></span>
+  <span style="flex:1"></span>
+  <span id="clock"></span>
+  <span class="blink">█</span>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ═══════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════
+const CHUNK      = 512 * 1024;   // 512 KB per read
+const CACHE_MAX  = 40;           // ~20 MB max cache
+const ROW_H      = 22;           // must match CSS
+const OVERSCAN   = 10;
+
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+let file          = null;
+let fileSize      = 0;
+let cols          = 16;
+let totalRows     = 0;
+let cache         = new Map();
+let cacheOrder    = [];
+let selOffset     = -1;
+let matches       = [];
+let matchSet      = new Set();
+let matchIdx      = 0;
+let searchTimer   = null;
+let rStart        = -1;
+let rEnd          = -1;
+let rafPending    = false;
+
+// ═══════════════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════════════
+setInterval(() => {
+  document.getElementById('clock').textContent =
+    new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
+}, 1000);
+
+// ═══════════════════════════════════════════
+//  DROP / OPEN
+// ═══════════════════════════════════════════
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  if (e.dataTransfer.files[0]) initFile(e.dataTransfer.files[0]);
+});
+document.getElementById('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) initFile(e.target.files[0]);
+});
+document.getElementById('hiddenInput').addEventListener('change', e => {
+  if (e.target.files[0]) initFile(e.target.files[0]);
+});
+
+// ═══════════════════════════════════════════
+//  INIT FILE
+// ═══════════════════════════════════════════
+async function initFile(f) {
+  file = f; fileSize = f.size;
+  cache.clear(); cacheOrder = [];
+  selOffset = -1; matches = []; matchSet = new Set();
+  document.getElementById('searchRes').textContent = '';
+  document.getElementById('searchInput').value = '';
+  document.getElementById('selInfo').textContent = '';
+
+  cols      = parseInt(document.getElementById('colsSelect').value);
+  totalRows = Math.ceil(fileSize / cols);
+
+  updateHeader();
+  document.getElementById('stSize').textContent  = fmtSize(fileSize);
+  document.getElementById('stRows').textContent  = totalRows.toLocaleString();
+  document.getElementById('stOff').textContent   = '0x00000000';
+  document.getElementById('fileInfo').innerHTML  =
+    `<strong>${esc(f.name)}</strong> &nbsp;·&nbsp; ${fmtSize(fileSize)}`;
+
+  dz.classList.add('hidden');
+  document.getElementById('inner').style.height = (totalRows * ROW_H) + 'px';
+
+  rStart = rEnd = -1;
+  vscroll.scrollTop = 0;
+  // Wait two frames so the browser has laid out the viewer height
+  requestAnimationFrame(() => requestAnimationFrame(async () => {
+    await renderViewport();
+  }));
+}
+
+// ═══════════════════════════════════════════
+//  CHUNK CACHE  (LRU)
+// ═══════════════════════════════════════════
+async function readChunk(ci) {
+  if (cache.has(ci)) {
+    cacheOrder = cacheOrder.filter(x => x !== ci);
+    cacheOrder.push(ci);
+    return cache.get(ci);
+  }
+  const start = ci * CHUNK;
+  const buf   = await file.slice(start, Math.min(start + CHUNK, fileSize)).arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  if (cacheOrder.length >= CACHE_MAX) { cache.delete(cacheOrder.shift()); }
+  cache.set(ci, bytes); cacheOrder.push(ci);
+  document.getElementById('stCache').textContent = cache.size;
+  return bytes;
+}
+
+async function readRange(start, len) {
+  const out = new Uint8Array(len);
+  let w = 0, cur = start;
+  while (w < len && cur < fileSize) {
+    const ci  = Math.floor(cur / CHUNK);
+    const ch  = await readChunk(ci);
+    const off = cur - ci * CHUNK;
+    const n   = Math.min(len - w, ch.length - off, fileSize - cur);
+    out.set(ch.subarray(off, off + n), w);
+    w += n; cur += n;
+  }
+  return out.subarray(0, w);
+}
+
+// ═══════════════════════════════════════════
+//  VIRTUAL SCROLL
+// ═══════════════════════════════════════════
+const vscroll = document.getElementById('vscroll');
+vscroll.addEventListener('scroll', () => {
+  if (!file) return;
+  document.getElementById('stOff').textContent =
+    '0x' + (Math.floor(vscroll.scrollTop / ROW_H) * cols).toString(16).toUpperCase().padStart(8,'0');
+  if (!rafPending) { rafPending = true; requestAnimationFrame(async () => { await renderViewport(); rafPending = false; }); }
+});
+
+async function renderViewport() {
+  if (!file) return;
+  const top    = vscroll.scrollTop;
+  const vh     = vscroll.clientHeight || vscroll.offsetHeight || window.innerHeight || 600;
+  const vis    = Math.ceil(vh / ROW_H);
+  const sr     = Math.max(0, Math.floor(top / ROW_H) - OVERSCAN);
+  const er     = Math.min(totalRows, sr + vis + OVERSCAN * 2);
+
+  if (sr === rStart && er === rEnd) return;
+  rStart = sr; rEnd = er;
+
+  const sb    = sr * cols;
+  const eb    = Math.min(er * cols, fileSize);
+  const bytes = await readRange(sb, eb - sb);
+
+  const cont  = document.getElementById('rows');
+  cont.style.transform = `translateY(${sr * ROW_H}px)`;
+
+  const frag = document.createDocumentFragment();
+  for (let row = sr; row < er; row++) {
+    const rs   = (row - sr) * cols;
+    const rb   = bytes.subarray(rs, Math.min(rs + cols, bytes.length));
+    if (!rb.length) break;
+    frag.appendChild(buildRow(row * cols, rb));
+  }
+  cont.innerHTML = '';
+  cont.appendChild(frag);
+}
+
+// ═══════════════════════════════════════════
+//  BUILD ROW
+// ═══════════════════════════════════════════
+function buildRow(startByte, rb) {
+  const div = document.createElement('div');
+  div.className = 'hex-row';
+
+  // Address
+  const addr = document.createElement('div');
+  addr.className = 'row-addr';
+  addr.textContent = startByte.toString(16).toUpperCase().padStart(8,'0');
+  div.appendChild(addr);
+
+  // Hex
+  const hexDiv = document.createElement('div');
+  hexDiv.className = 'row-hex';
+  for (let i = 0; i < cols; i++) {
+    if (i === cols >> 1) {
+      const g = document.createElement('span'); g.className = 'hex-gap'; hexDiv.appendChild(g);
+    }
+    if (i < rb.length) {
+      const v  = rb[i];
+      const of = startByte + i;
+      const sp = document.createElement('span');
+      let cl = 'hb';
+      if (v === 0)               cl += ' z';
+      else if (v === 0xFF)       cl += ' ff';
+      else if (v >= 32 && v < 127) cl += ' pr';
+      if (of === selOffset)      cl += ' sel';
+      if (matchSet.has(of))      cl += ' found';
+      sp.className    = cl;
+      sp.textContent  = v.toString(16).toUpperCase().padStart(2,'0');
+      sp.dataset.o    = of;
+      sp.dataset.v    = v;
+      sp.addEventListener('click',      onByteClick);
+      sp.addEventListener('mouseenter', onByteHover);
+      sp.addEventListener('mouseleave', hideTip);
+      hexDiv.appendChild(sp);
+      hexDiv.appendChild(document.createTextNode(' '));
+    } else {
+      hexDiv.appendChild(document.createTextNode('   '));
+    }
+  }
+  div.appendChild(hexDiv);
+
+  // ASCII
+  const aDiv = document.createElement('div');
+  aDiv.className = 'row-ascii';
+  for (let i = 0; i < rb.length; i++) {
+    const v  = rb[i];
+    const of = startByte + i;
+    const pr = v >= 32 && v < 127;
+    const sp = document.createElement('span');
+    sp.className   = 'ac' + (pr ? '' : ' np') + (of === selOffset ? ' sel' : '');
+    sp.textContent = pr ? String.fromCharCode(v) : '·';
+    sp.dataset.o   = of;
+    sp.dataset.v   = v;
+    sp.addEventListener('click', onByteClick);
+    aDiv.appendChild(sp);
+  }
+  div.appendChild(aDiv);
+  return div;
+}
+
+// ═══════════════════════════════════════════
+//  BYTE INTERACTION
+// ═══════════════════════════════════════════
+function onByteClick(e) {
+  const of = parseInt(e.target.dataset.o);
+  const v  = parseInt(e.target.dataset.v);
+  selOffset = selOffset === of ? -1 : of;
+  if (selOffset >= 0) {
+    document.getElementById('selInfo').textContent =
+      `SEL  0x${of.toString(16).toUpperCase().padStart(8,'0')}  ` +
+      `VAL  0x${v.toString(16).toUpperCase().padStart(2,'0')}  dec:${v}  bin:${v.toString(2).padStart(8,'0')}`;
+  } else {
+    document.getElementById('selInfo').textContent = '';
+  }
+  rStart = rEnd = -1;
+  renderViewport();
+}
+
+function onByteHover(e) {
+  const of = parseInt(e.target.dataset.o);
+  const v  = parseInt(e.target.dataset.v);
+  const tt = document.getElementById('tooltip');
+  tt.innerHTML =
+    `OFFSET: 0x${of.toString(16).toUpperCase().padStart(8,'0')} (${of})<br>` +
+    `HEX:    0x${v.toString(16).toUpperCase().padStart(2,'0')}<br>` +
+    `DEC:    ${v}<br>` +
+    `BIN:    ${v.toString(2).padStart(8,'0')}<br>` +
+    `ASCII:  ${v>=32&&v<127 ? String.fromCharCode(v) : '(non-printable)'}`;
+  tt.style.display = 'block';
+  positionTip(e);
+}
+function hideTip() { document.getElementById('tooltip').style.display = 'none'; }
+document.addEventListener('mousemove', positionTip);
+function positionTip(e) {
+  const tt = document.getElementById('tooltip');
+  if (tt.style.display === 'block') {
+    tt.style.left = (e.clientX + 14) + 'px';
+    tt.style.top  = (e.clientY - 10) + 'px';
+  }
+}
+
+// ═══════════════════════════════════════════
+//  SEARCH
+// ═══════════════════════════════════════════
+function schedSearch() { clearTimeout(searchTimer); searchTimer = setTimeout(doSearch, 350); }
+
+async function doSearch() {
+  if (!file) return;
+  const q = document.getElementById('searchInput').value.trim();
+  matches = []; matchSet = new Set();
+  if (!q) { document.getElementById('searchRes').textContent = ''; rStart=rEnd=-1; renderViewport(); return; }
+
+  document.getElementById('searchRes').textContent = 'searching…';
+
+  // Build pattern
+  let pat;
+  if (/^[0-9a-fA-F\s]+$/.test(q)) {
+    const parts = q.trim().split(/\s+/).map(s => parseInt(s,16));
+    if (parts.every(v => !isNaN(v) && v <= 255)) pat = new Uint8Array(parts);
+  }
+  if (!pat) pat = new TextEncoder().encode(q);
+
+  const pLen  = pat.length;
+  const SLICE = 2 * 1024 * 1024;
+  let found   = 0;
+
+  for (let pos = 0; pos <= fileSize - pLen; pos += SLICE) {
+    const end   = Math.min(pos + SLICE + pLen - 1, fileSize);
+    const bytes = await readRange(pos, end - pos);
+    for (let i = 0; i <= bytes.length - pLen; i++) {
+      let ok = true;
+      for (let j = 0; j < pLen; j++) if (bytes[i+j] !== pat[j]) { ok=false; break; }
+      if (ok) { const abs = pos+i; matches.push(abs); matchSet.add(abs); found++; if (found>=50000) break; }
+    }
+    if (found >= 50000) break;
+    await new Promise(r => setTimeout(r,0));
+  }
+
+  matchIdx = 0;
+  document.getElementById('searchRes').textContent = found
+    ? `${found>=50000?'50000+':found} match${found!==1?'es':''}`
+    : 'no matches';
+  if (found) jumpToOffset(matches[0]);
+  rStart = rEnd = -1;
+  renderViewport();
+}
+
+function jumpMatch(dir) {
+  if (!matches.length) return;
+  matchIdx = (matchIdx + dir + matches.length) % matches.length;
+  jumpToOffset(matches[matchIdx]);
+  rStart = rEnd = -1;
+  renderViewport();
+}
+
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchRes').textContent = '';
+  document.getElementById('searchBar').classList.remove('open');
+  matches = []; matchSet = new Set();
+  rStart = rEnd = -1;
+  renderViewport();
+}
+
+// ═══════════════════════════════════════════
+//  GOTO
+// ═══════════════════════════════════════════
+function doGoto() {
+  const raw = document.getElementById('gotoInput').value.trim();
+  let off = /^0x/i.test(raw) ? parseInt(raw,16) : parseInt(raw,10);
+  if (isNaN(off)||off<0) return;
+  jumpToOffset(Math.min(off, fileSize-1));
+}
+
+function jumpToOffset(off) {
+  const row = Math.floor(off / cols);
+  vscroll.scrollTop = row * ROW_H;
+}
+
+// ═══════════════════════════════════════════
+//  COLS / HEADER
+// ═══════════════════════════════════════════
+function changeCols() {
+  cols      = parseInt(document.getElementById('colsSelect').value);
+  totalRows = Math.ceil(fileSize / cols);
+  document.getElementById('inner').style.height = (totalRows * ROW_H) + 'px';
+  updateHeader();
+  rStart = rEnd = -1;
+  renderViewport();
+}
+
+function updateHeader() {
+  let h = '';
+  for (let i = 0; i < cols; i++) {
+    if (i === cols>>1) h += ' ';
+    h += i.toString(16).toUpperCase().padStart(2,'0');
+    if (i < cols-1) h += ' ';
+  }
+  document.getElementById('hdrBytes').textContent = h;
+}
+
+// ═══════════════════════════════════════════
+//  EXPORT (visible rows only)
+// ═══════════════════════════════════════════
+async function exportVisible() {
+  if (!file) return;
+  const top   = vscroll.scrollTop;
+  const vh    = vscroll.clientHeight;
+  const sr    = Math.floor(top / ROW_H);
+  const er    = Math.min(totalRows, sr + Math.ceil(vh / ROW_H));
+  const sb    = sr * cols;
+  const eb    = Math.min(er * cols, fileSize);
+  const bytes = await readRange(sb, eb - sb);
+
+  let out = `HexView Export: ${file.name}\nSize: ${fmtSize(fileSize)}\nRange: 0x${sb.toString(16).toUpperCase()}–0x${eb.toString(16).toUpperCase()}\n${'='.repeat(60)}\n\n`;
+  for (let row = sr; row < er; row++) {
+    const rs = (row-sr)*cols;
+    const rb = bytes.subarray(rs, rs+cols);
+    if (!rb.length) break;
+    out += (row*cols).toString(16).toUpperCase().padStart(8,'0') + '  ';
+    let asc = '';
+    for (let i = 0; i < cols; i++) {
+      if (i < rb.length) { out += rb[i].toString(16).toUpperCase().padStart(2,'0')+' '; asc += rb[i]>=32&&rb[i]<127?String.fromCharCode(rb[i]):'.'; }
+      else               { out += '   '; asc += ' '; }
+      if (i === (cols>>1)-1) out += ' ';
+    }
+    out += ' '+asc+'\n';
+  }
+
+  const a = document.createElement('a');
+  a.href     = URL.createObjectURL(new Blob([out],{type:'text/plain'}));
+  a.download = file.name+'.hexdump.txt';
+  a.click();
+}
+
+// ═══════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════
+function toggleBar(id) {
+  document.getElementById(id).classList.toggle('open');
+  const inp = document.getElementById(id).querySelector('input');
+  if (inp && document.getElementById(id).classList.contains('open')) inp.focus();
+}
+
+function fmtSize(b) {
+  if (b < 1024)        return b+' B';
+  if (b < 1048576)     return (b/1024).toFixed(1)+' KB';
+  if (b < 1073741824)  return (b/1048576).toFixed(2)+' MB';
+  return (b/1073741824).toFixed(3)+' GB';
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='f') { e.preventDefault(); toggleBar('searchBar'); }
+  if ((e.ctrlKey||e.metaKey) && e.key==='g') { e.preventDefault(); toggleBar('gotoBar'); }
+  if (e.key==='F3') { e.preventDefault(); jumpMatch(e.shiftKey?-1:1); }
+  if (e.key==='Escape') {
+    document.getElementById('searchBar').classList.remove('open');
+    document.getElementById('gotoBar').classList.remove('open');
+  }
+});
+</script>
+</body>
+</html>

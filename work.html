@@ -154,28 +154,11 @@ button:disabled { opacity:.3; cursor:default; }
 
 <!-- ═══ SEND ═══ -->
 <div class="panel" id="tab-send">
-
-  <!-- Bot pool -->
-  <div style="background:#141414;border:1px solid #1e1e1e;padding:10px 12px;margin-bottom:10px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-      <span style="color:#444;font-size:10px;letter-spacing:2px;">BOTS</span>
-      <button onclick="showAddBot()" style="font-size:10px;padding:3px 8px;">+ Add bot</button>
-    </div>
-    <div id="bot-list"></div>
-    <div id="add-bot-form" style="display:none;margin-top:8px;">
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-        <input type="password" id="new-bot-token" placeholder="New bot token (must be admin in channel)" style="flex:1;min-width:200px">
-        <button class="pri" onclick="addBot()">✓ Add</button>
-        <button onclick="document.getElementById('add-bot-form').style.display='none'">✕</button>
-      </div>
-    </div>
-  </div>
-
   <div class="drop" id="sd">
     <input type="file" id="sf">
     <div class="drop-ico">📁</div>
     <h3>Drop file or click to browse</h3>
-    <p>Each 20 MB chunk sent as .txt — multiple bots upload in parallel</p>
+    <p>Each 10 MB chunk → sent as .txt document to Telegram</p>
   </div>
 
   <div class="badge" id="sb">
@@ -187,7 +170,7 @@ button:disabled { opacity:.3; cursor:default; }
     <div class="stat"><div class="sl">FILE SIZE</div><div class="sv" id="s1">—</div></div>
     <div class="stat"><div class="sl">HEX SIZE</div><div class="sv" id="s2">—</div></div>
     <div class="stat"><div class="sl">TXT FILES</div><div class="sv" id="s3">—</div></div>
-    <div class="stat"><div class="sl">BOTS × SLOTS</div><div class="sv" id="s4">—</div></div>
+    <div class="stat"><div class="sl">PER FILE</div><div class="sv" id="s4">—</div></div>
   </div>
 
   <div class="brow">
@@ -223,17 +206,7 @@ button:disabled { opacity:.3; cursor:default; }
 
 <script>
 // ── CONFIG ──
-// ── BOTS CONFIG ──
-// Add more bots here for faster parallel uploads (each bot = separate rate limit)
-// All bots must be admins in the channel. First bot is also used for header/footer/download.
-const BOTS = [
-  '7137668641:AAHH711HV5qwOVLwIxLzcV4-SrxWjPsc0-4', // Bot 1 (primary)
-  // 'TOKEN_BOT_2',
-  // 'TOKEN_BOT_3',
-  // 'TOKEN_BOT_4',
-  // 'TOKEN_BOT_5',
-];
-const TOKEN = BOTS[0]; // primary bot for header/footer/download
+const TOKEN = '7137668641:AAHH711HV5qwOVLwIxLzcV4-SrxWjPsc0-4';
 
 // ── INDEXEDDB CACHE (no size limit unlike localStorage) ──
 const IDB_NAME = 'telehex', IDB_STORE = 'parts', IDB_VER = 1;
@@ -285,8 +258,7 @@ async function idbDel(key) {
 }
 const CHAT  = '-1002111265726';
 const BYTES_PER_FILE = 20 * 1024 * 1024; // 20 MB data → 40 MB hex txt (TG limit 50 MB)
-const PARALLEL_PER_BOT = 3; // concurrent uploads per bot
-const PARALLEL = () => BOTS.length * PARALLEL_PER_BOT; // total slots
+const PARALLEL = 6; // concurrent uploads
 const LS_KEY = 'telehex_history';
 
 // ── TABS ──
@@ -295,7 +267,6 @@ function sw(id) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   if (id==='files') renderHistory();
-  if (id==='send') renderBots();
 }
 
 // ── UTILS ──
@@ -395,10 +366,10 @@ function setEntryPrg(id, pct, lbl) {
 }
 
 // ── TELEGRAM ──
-async function tgJSON(method, body, tok=TOKEN) {
+async function tgJSON(method, body) {
   for (let t=0; t<5; t++) {
     try {
-      const r = await fetch(`https://api.telegram.org/bot${tok}/${method}`, {
+      const r = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}`, {
         method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
       });
       const d = await r.json();
@@ -410,28 +381,32 @@ async function tgJSON(method, body, tok=TOKEN) {
   return {ok:false, description:'max retries'};
 }
 
-async function tgSendDoc(chatId, filename, hexStr, caption, tok=TOKEN) {
+async function tgSendDoc(chatId, filename, hexStr, caption) {
+  // Encode hex string to UTF-8 bytes explicitly
   const encoder = new TextEncoder();
   const bytes = encoder.encode(hexStr);
   const blob = new Blob([bytes], {type:'text/plain; charset=utf-8'});
 
   for (let t=0; t<5; t++) {
     try {
+      // Create fresh FormData each retry (consumed after first use)
       const form = new FormData();
       form.append('chat_id', chatId);
       form.append('document', blob, filename);
       if (caption) form.append('caption', caption);
       form.append('disable_notification','true');
-      const r = await fetch(`https://api.telegram.org/bot${tok}/sendDocument`, {method:'POST', body:form});
+      const r = await fetch(`https://api.telegram.org/bot${TOKEN}/sendDocument`, {method:'POST', body:form});
       const d = await r.json();
       if (d.ok) return d;
       if (d.error_code===429) {
-        await sleep(((d.parameters?.retry_after||3)+1)*1000);
+        const wait = ((d.parameters?.retry_after||3)+1)*1000;
+        await sleep(wait);
       } else {
         console.error('sendDocument error:', d);
         return d;
       }
     } catch(e) {
+      console.error('sendDocument exception:', e);
       await sleep(1000);
     }
   }
@@ -491,83 +466,6 @@ function lgAny(cls, msg) {
   lg(id, cls, msg);
 }
 
-// ── BOT MANAGEMENT ──
-// Load extra bot tokens from localStorage (in addition to hardcoded BOTS[0])
-(function loadSavedBots() {
-  const saved = JSON.parse(localStorage.getItem('telehex_bots') || '[]');
-  saved.forEach(tok => { if (!BOTS.includes(tok)) BOTS.push(tok); });
-})();
-
-function saveBots() {
-  localStorage.setItem('telehex_bots', JSON.stringify(BOTS.slice(1)));
-}
-
-function renderBots() {
-  const el = document.getElementById('bot-list');
-  if (!el) return;
-  el.innerHTML = '';
-  BOTS.forEach((tok, i) => {
-    const div = document.createElement('div');
-    div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px;';
-    const status = document.createElement('span');
-    status.id = `bot-status-${i}`;
-    status.style.cssText = 'color:#0a0;';
-    status.textContent = `● Bot ${i+1}`;
-    const info = document.createElement('span');
-    info.style.cssText = 'color:#333;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-    info.textContent = tok.slice(0,12)+'...'+tok.slice(-6);
-    div.appendChild(status);
-    div.appendChild(info);
-    if (i > 0) {
-      const del = document.createElement('button');
-      del.textContent = '✕';
-      del.style.cssText = 'font-size:10px;padding:2px 6px;';
-      del.onclick = () => removeBot(i);
-      div.appendChild(del);
-    } else {
-      const badge = document.createElement('span');
-      badge.style.cssText = 'color:#555;font-size:10px;';
-      badge.textContent = 'primary';
-      div.appendChild(badge);
-    }
-    el.appendChild(div);
-  });
-  // Update stats
-  const s3 = document.getElementById('s3');
-  if (s3 && sFile) {
-    const nf = Math.ceil(sFile.size / BYTES_PER_FILE);
-    s3.textContent = nf;
-  }
-  document.getElementById('s4') && (document.getElementById('s4').textContent = BOTS.length + ' bot(s) × ' + PARALLEL_PER_BOT);
-}
-
-async function addBot() {
-  const tok = document.getElementById('new-bot-token').value.trim();
-  if (!tok) return;
-  lg('s','if','Verifying new bot...');
-  const d = await tgJSON('getMe', {}, tok);
-  if (!d.ok) { lg('s','er','Bad token: '+d.description); return; }
-  BOTS.push(tok);
-  saveBots();
-  document.getElementById('new-bot-token').value = '';
-  document.getElementById('add-bot-form').style.display = 'none';
-  renderBots();
-  lg('s','ok', `Bot ${BOTS.length} added: @${d.result.username} (${BOTS.length} bots total → ${BOTS.length * PARALLEL_PER_BOT} parallel slots)`);
-}
-
-function removeBot(i) {
-  BOTS.splice(i, 1);
-  saveBots();
-  renderBots();
-  lg('s','if', `Bot removed. ${BOTS.length} bot(s) active.`);
-}
-
-function showAddBot() {
-  const f = document.getElementById('add-bot-form');
-  f.style.display = f.style.display === 'none' ? 'flex' : 'none';
-  if (f.style.display === 'flex') document.getElementById('new-bot-token').focus();
-}
-
 // ── SEND ──
 let sFile = null;
 
@@ -588,7 +486,7 @@ function setF(f) {
   document.getElementById('s1').textContent=fmtSz(f.size);
   document.getElementById('s2').textContent=fmtSz(f.size*2) + ' hex';
   document.getElementById('s3').textContent=nf;
-  document.getElementById('s4').textContent=BOTS.length+' bot(s) × '+PARALLEL_PER_BOT;
+  document.getElementById('s4').textContent=fmtSz(Math.min(BYTES_PER_FILE,f.size)*2);
 }
 
 function clearS() {
@@ -623,97 +521,61 @@ async function doSend() {
   const t0=Date.now(); let sent=0;
   const fileIds=new Array(numFiles).fill(null);
 
-  // ASCII lookup table — built once
+  // Build ASCII lookup table once
   const ascii = new Uint8Array(512);
   for(let x=0;x<256;x++){
     const h=x.toString(16).padStart(2,'0');
     ascii[x*2]=h.charCodeAt(0); ascii[x*2+1]=h.charCodeAt(1);
   }
 
-  // Read one slice and convert to hex Blob — never keeps full string in memory
-  // Returns a Blob directly so the string can be GC'd after fetch starts
-  const makeBlob = (start, end) => new Promise((res, rej) => {
-    const fr = new FileReader();
-    fr.onload = ev => {
-      const buf = new Uint8Array(ev.target.result);
-      // Convert to hex bytes in-place
-      const out = new Uint8Array(buf.length * 2);
-      for(let j=0;j<buf.length;j++){
-        out[j*2]   = ascii[buf[j]*2];
-        out[j*2+1] = ascii[buf[j]*2+1];
-      }
-      // Blob takes ownership of the ArrayBuffer — original buf and out can GC
-      res(out);
-    };
-    fr.onerror = rej;
-    fr.readAsArrayBuffer(sFile.slice(start, end));
+  // Helper: read file slice → Uint8Array
+  const readSlice = (s,e) => new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onload=ev=>res(new Uint8Array(ev.target.result));
+    fr.onerror=rej;
+    fr.readAsArrayBuffer(sFile.slice(s,e));
   });
 
-  // Per-bot semaphores — each bot gets PARALLEL_PER_BOT independent upload slots
-  const botActive = BOTS.map(() => 0);
-  const botQueue  = BOTS.map(() => []);
-
-  // Acquire a slot on a specific bot
-  const botSem = b => new Promise(r => {
-    if (botActive[b] < PARALLEL_PER_BOT) { botActive[b]++; r(); }
-    else botQueue[b].push(r);
-  });
-  const botRel = b => {
-    botActive[b]--;
-    if (botQueue[b].length) { botActive[b]++; botQueue[b].shift()(); }
+  // Helper: bytes → hex string (fast, no GC pressure)
+  const toHex = buf => {
+    const out = new Uint8Array(buf.length*2);
+    for(let j=0;j<buf.length;j++){ out[j*2]=ascii[buf[j]*2]; out[j*2+1]=ascii[buf[j]*2+1]; }
+    return new TextDecoder().decode(out);
   };
 
-  // Round-robin: pick bot with fewest active uploads right now
-  const pickBot = () => {
-    let best = 0, bestLoad = botActive[0];
-    for (let b = 1; b < BOTS.length; b++) {
-      if (botActive[b] < bestLoad) { best = b; bestLoad = botActive[b]; }
-    }
-    return best;
-  };
+  // Pipeline: pre-read next chunk while current is uploading
+  // Semaphore limits concurrent uploads to PARALLEL
+  let active=0, queue=[];
+  const sem = () => new Promise(r=>{ if(active<PARALLEL){active++;r();} else queue.push(r); });
+  const rel = () => { active--; if(queue.length) { active++; queue.shift()(); } };
 
-  const totalSlots = () => PARALLEL_PER_BOT * BOTS.length;
-  const totalActive = () => botActive.reduce((a,b) => a+b, 0);
+  const uploadPromises = [];
+  for(let i=0;i<numFiles;i++){
+    const s=i*BYTES_PER_FILE, e=Math.min(s+BYTES_PER_FILE,total);
+    const p = (async()=>{
+      // Read from disk (parallel — browser handles concurrent file reads fine)
+      const buf = await readSlice(s,e);
+      const hexStr = toHex(buf);
 
-  lg('s','if', `Using ${BOTS.length} bot(s) × ${PARALLEL_PER_BOT} slots = ${totalSlots()} parallel uploads`);
-
-  // Sequential read (RAM safe) + parallel upload per bot
-  for (let i = 0; i < numFiles; i++) {
-    const s = i * BYTES_PER_FILE, e = Math.min(s + BYTES_PER_FILE, total);
-
-    // Read + convert ONE chunk at a time (RAM safe)
-    const hexBytes = await makeBlob(s, e);
-    const hexStr   = new TextDecoder().decode(hexBytes);
-
-    // Pick least-loaded bot and wait for its slot
-    const b = pickBot();
-    await botSem(b);
-
-    // Cache to IndexedDB (fire & forget)
-    idbSet(`th_${startId}_${i}`, hexStr);
-
-    // Upload on chosen bot (async — main loop continues to next read immediately)
-    (async (idx, hs, bs, be, botIdx) => {
+      // Wait for upload slot
+      await sem();
       try {
-        const tok = BOTS[botIdx];
-        const r = await tgSendDoc(CHAT, `telehex_${idx+1}_of_${numFiles}.txt`, hs, `TELEHEX2_PART ${idx+1}/${numFiles}`, tok);
-        if (!r.ok) {
-          lg('s','er', `Part ${idx+1} failed (bot${botIdx+1}): ${r.description}`);
-        } else {
-          fileIds[idx] = r.result.document.file_id;
+        const r=await tgSendDoc(CHAT,`telehex_${i+1}_of_${numFiles}.txt`,hexStr,`TELEHEX2_PART ${i+1}/${numFiles}`);
+        if (!r.ok){ lg('s','er',`Part ${i+1} failed: ${r.description}`); }
+        else {
+          fileIds[i]=r.result.document.file_id;
+          idbSet(`th_${startId}_${i}`, hexStr); // fire & forget, don't await
           sent++;
-          const elapsed = (Date.now()-t0)/1000 || 0.001;
-          const spd = fmtSz(Math.round((sent*BYTES_PER_FILE)/elapsed));
-          prg('s', 5+Math.round((sent/numFiles)*90), `${sent}/${numFiles} — ${spd}/s — ${BOTS.length} bot(s)`);
-          if (sent===1 || sent%5===0 || sent===numFiles)
-            lg('s','ok', `Part ${idx+1}/${numFiles} ✓ bot${botIdx+1} (${fmtSz(be-bs)})`);
+          const elapsed=(Date.now()-t0)/1000||0.001;
+          const spd=fmtSz(Math.round((sent*BYTES_PER_FILE)/elapsed));
+          prg('s',5+Math.round((sent/numFiles)*90),`${sent}/${numFiles} — ${fmtSz(e-s)}/part — ${spd}/s`);
+          if(sent===1||sent%3===0||sent===numFiles) lg('s','ok',`Part ${i+1}/${numFiles} ✓`);
         }
-      } finally { botRel(botIdx); }
-    })(i, hexStr, s, e, b);
+      } finally { rel(); }
+    })();
+    uploadPromises.push(p);
   }
-
-  // Wait for all in-flight uploads
-  while (totalActive() > 0) await sleep(100);
+  await Promise.all(uploadPromises);
 
   // Footer
   await tgJSON('sendMessage',{
@@ -908,7 +770,6 @@ function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 
 // ── INIT ──
 renderHistory();
-renderBots();
 </script>
 </body>
 </html>

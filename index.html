@@ -805,21 +805,42 @@ async function downloadEntry(entryId) {
       const buf = rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes);
       str = new TextDecoder().decode(buf).trim().replace(/\s/g,'');
     }
-    const isHex = str.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(str);
-    if (isHex) {
-      const bytes = new Uint8Array(str.length >> 1);
+    // Try base64 first, fall back to hex
+    // Base64: only A-Za-z0-9+/= chars, length divisible by 4 (with padding)
+    const looksB64 = /[+/=A-Z]/.test(str.slice(0,32)); // has chars impossible in hex
+    const looksHex = str.length % 2 === 0 && /^[0-9a-fA-F]/.test(str[0]);
+
+    const decodeHex = s => {
+      const bytes = new Uint8Array(s.length >> 1);
       const lut = new Uint8Array(103);
       for(let i=0;i<10;i++) lut[48+i]=i;
       for(let i=0;i<6;i++){lut[65+i]=10+i; lut[97+i]=10+i;}
       for(let i=0;i<bytes.length;i++)
-        bytes[i]=(lut[str.charCodeAt(i*2)]<<4)|lut[str.charCodeAt(i*2+1)];
+        bytes[i]=(lut[s.charCodeAt(i*2)]<<4)|lut[s.charCodeAt(i*2+1)];
       return bytes;
-    } else {
-      const bin = atob(str);
+    };
+
+    const decodeB64 = s => {
+      const clean = s.replace(/[^A-Za-z0-9+/=]/g,'');
+      const bin = atob(clean);
       const out = new Uint8Array(bin.length);
       for(let j=0;j<bin.length;j++) out[j]=bin.charCodeAt(j);
       return out;
+    };
+
+    if (looksB64) {
+      try { return decodeB64(str); } catch(e) {}
+      // fallback to hex
+      try { return decodeHex(str); } catch(e) {}
+    } else if (looksHex) {
+      try { return decodeHex(str); } catch(e) {}
+      try { return decodeB64(str); } catch(e) {}
+    } else {
+      // last resort: try both
+      try { return decodeB64(str); } catch(e) {}
+      try { return decodeHex(str); } catch(e) {}
     }
+    throw new Error('Cannot decode chunk: unknown format');
   };
 
   // ── Streaming download via StreamSaver.js ──

@@ -553,13 +553,9 @@ async function tgJSON(method, body, botIndex=0) {
   return {ok:false, description:'max retries'};
 }
 
-async function tgSendDoc(chatId, filename, b64str, caption, botIndex=0) {
-  // Send as multipart/form-data with raw binary — no base64 JSON overhead
-  // Convert base64 string → binary blob before sending
-  const bin  = atob(b64str);
-  const bytes = new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-  const blob = new Blob([bytes], {type:'text/plain'});
+async function tgSendDoc(chatId, filename, rawData, caption, botIndex=0) {
+  // rawData is Uint8Array — send directly as binary, zero encoding overhead
+  const blob = new Blob([rawData], {type: 'application/octet-stream'});
 
   for (let t=0; t<5; t++) {
     try {
@@ -685,15 +681,7 @@ async function doSend() {
     fr.readAsArrayBuffer(sFile.slice(s,e));
   });
 
-  // Helper: bytes → base64 string (native btoa — 10x faster than hex)
-  const toB64 = buf => {
-    // btoa needs binary string
-    let bin = '';
-    const chunk = 32768;
-    for(let i=0;i<buf.length;i+=chunk)
-      bin += String.fromCharCode.apply(null, buf.subarray(i, i+chunk));
-    return btoa(bin);
-  };
+  // No encoding needed — send raw bytes directly as Blob
 
   // ── MEMORY-SAFE MULTI-BOT UPLOAD ──
   // Peak RAM = 1 chunk raw (4MB) + 1 chunk hex (8MB) + PARALLEL in-flight Blobs
@@ -715,11 +703,8 @@ async function doSend() {
     // ── Step 1: read raw bytes ──
     const buf = await readSlice(s, e);
 
-    // ── Step 2: encode to base64 (native btoa — 33% overhead vs 100% hex) ──
-    const b64 = toB64(buf);
-    // buf no longer needed
-    // Only cache small files locally (large files waste disk space)
-    if(total < 100*1024*1024) idbSet(`th_${startId}_${i}`, b64);
+    // ── Step 2: raw bytes ready
+    if(total < 100*1024*1024) idbSet(`th_${startId}_${i}`, buf);
 
     // ── Step 3: wait for a bot slot, then launch upload ──
     const b = pickBot();
@@ -729,7 +714,7 @@ async function doSend() {
       try {
         const r = await tgSendDoc(
           null,
-          `chunk_${idx+1}_of_${numFiles}.b64`,
+          `chunk_${idx+1}_of_${numFiles}.bin`,
           data,
           `VAULTX_PART ${idx+1}/${numFiles}`,
           bi
@@ -745,7 +730,7 @@ async function doSend() {
             lg('s','ok',`Part ${idx+1}/${numFiles} ok`);
         }
       } finally { botRel(bi); }
-    })(i, b64, b);
+    })(i, buf, b);
 
     inFlight.push(p);
     if(i % 5 === 4) await sleep(0); // yield for GC
@@ -804,51 +789,44 @@ async function downloadEntry(entryId) {
   const t0 = Date.now();
   let done = 0;
 
-  // Decode chunk: auto-detects base64 or hex format
+  // New files: raw bytes, no decoding needed
+  // Old files (hex/base64): decode automatically
   const decodeChunk = rawBytes => {
-    let str;
-    if (typeof rawBytes === 'string') {
-      str = rawBytes.trim().replace(/\s/g,'');
-    } else {
-      const buf = rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes);
-      str = new TextDecoder().decode(buf).trim().replace(/\s/g,'');
+    // If it's already Uint8Array from Worker binary response — check if it's raw or encoded
+    const arr = rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes);
+
+    // Heuristic: if first 4 bytes look like printable ASCII (hex or b64),
+    // it's an old encoded file. Otherwise it's raw binary.
+    const first = arr[0];
+    const isPrintable = (first >= 48 && first <= 57) || // 0-9
+                        (first >= 65 && first <= 70) || // A-F
+                        (first >= 97 && first <= 102);  // a-f
+
+    if (!isPrintable) {
+      // Raw binary — return as-is (new format)
+      return arr;
     }
-    // Try base64 first, fall back to hex
-    // Base64: only A-Za-z0-9+/= chars, length divisible by 4 (with padding)
-    const looksB64 = /[+/=A-Z]/.test(str.slice(0,32)); // has chars impossible in hex
-    const looksHex = str.length % 2 === 0 && /^[0-9a-fA-F]/.test(str[0]);
 
-    const decodeHex = s => {
-      const bytes = new Uint8Array(s.length >> 1);
-      const lut = new Uint8Array(103);
-      for(let i=0;i<10;i++) lut[48+i]=i;
-      for(let i=0;i<6;i++){lut[65+i]=10+i; lut[97+i]=10+i;}
-      for(let i=0;i<bytes.length;i++)
-        bytes[i]=(lut[s.charCodeAt(i*2)]<<4)|lut[s.charCodeAt(i*2+1)];
-      return bytes;
-    };
-
-    const decodeB64 = s => {
-      const clean = s.replace(/[^A-Za-z0-9+/=]/g,'');
-      const bin = atob(clean);
-      const out = new Uint8Array(bin.length);
-      for(let j=0;j<bin.length;j++) out[j]=bin.charCodeAt(j);
-      return out;
-    };
+    // Old encoded format — decode as text first
+    const str = new TextDecoder().decode(arr).trim().replace(/\s/g,'');
+    const looksB64 = /[+/=A-Z]/.test(str.slice(0, 32));
 
     if (looksB64) {
-      try { return decodeB64(str); } catch(e) {}
-      // fallback to hex
-      try { return decodeHex(str); } catch(e) {}
-    } else if (looksHex) {
-      try { return decodeHex(str); } catch(e) {}
-      try { return decodeB64(str); } catch(e) {}
-    } else {
-      // last resort: try both
-      try { return decodeB64(str); } catch(e) {}
-      try { return decodeHex(str); } catch(e) {}
+      try {
+        const bin = atob(str.replace(/[^A-Za-z0-9+/=]/g,''));
+        const out = new Uint8Array(bin.length);
+        for(let j=0;j<bin.length;j++) out[j]=bin.charCodeAt(j);
+        return out;
+      } catch(e) {}
     }
-    throw new Error('Cannot decode chunk: unknown format');
+    // Hex fallback
+    const lut = new Uint8Array(103);
+    for(let i=0;i<10;i++) lut[48+i]=i;
+    for(let i=0;i<6;i++){lut[65+i]=10+i; lut[97+i]=10+i;}
+    const bytes = new Uint8Array(str.length >> 1);
+    for(let i=0;i<bytes.length;i++)
+      bytes[i]=(lut[str.charCodeAt(i*2)]<<4)|lut[str.charCodeAt(i*2+1)];
+    return bytes;
   };
 
   // ── Streaming download via StreamSaver.js ──

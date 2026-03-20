@@ -554,13 +554,21 @@ async function tgJSON(method, body, botIndex=0) {
 }
 
 async function tgSendDoc(chatId, filename, b64str, caption, botIndex=0) {
+  // Send as multipart/form-data with raw binary — no base64 JSON overhead
+  // Convert base64 string → binary blob before sending
+  const bin  = atob(b64str);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  const blob = new Blob([bytes], {type:'text/plain'});
+
   for (let t=0; t<5; t++) {
     try {
-      const r = await fetch(WORKER + '/send-doc', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ filename, content_b64: b64str, caption, bot_index: botIndex })
-      });
+      const form = new FormData();
+      form.append('bot_index', String(botIndex));
+      form.append('caption', caption || '');
+      form.append('filename', filename);
+      form.append('file', blob, filename);
+      const r = await fetch(WORKER + '/send-doc', { method: 'POST', body: form });
       const d = await r.json();
       if (d.ok) return d;
       if (d.error_code===429) { await sleep(((d.parameters?.retry_after||3)+1)*1000); }

@@ -1,94 +1,968 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Files</title>
-    <style>
-        body {
-            font-family: "Comic Sans MS", Comic Sans, cursive, sans-serif;
-            background-color: rgb(47, 47, 47);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vault</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<!-- StreamSaver: streams file directly to disk, no RAM limit -->
+<script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
+<style>
+:root {
+  --bg:      #080808;
+  --bg1:     #0d0d0d;
+  --bg2:     #111;
+  --border:  #1c1c1c;
+  --border2: #242424;
+  --green:   #00ff41;
+  --green2:  #00c832;
+  --green3:  #003d10;
+  --amber:   #ffb300;
+  --red:     #ff3333;
+  --dim:     #2a2a2a;
+  --dim2:    #1a1a1a;
+  --text:    #c8c8c8;
+  --text2:   #555;
+  --text3:   #333;
+  --font:    'JetBrains Mono', monospace;
+}
 
-        button {
-            font-family: "Comic Sans MS", Comic Sans, cursive, sans-serif;
-            background-color: #ffffff;
-            color: rgb(42, 42, 42);
-            border: none;
-            padding: 10px 20px;
-            text-align: center;
-            text-decoration: none;
-            display: block;
-            font-size: 16px;
-            margin: 12px 0;
-            cursor: pointer;
-            border-radius: 5px;
-        }
+* { margin:0; padding:0; box-sizing:border-box; }
 
-        p {
-            font-family: "Comic Sans MS", Comic Sans, cursive, sans-serif;
-            color: white;
-            font-size: 35px;
-            margin-bottom: 0px;
-        }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  min-height: 100vh;
+  cursor: default;
+}
 
-        @media only screen and (max-width: 600px) {
-            body {
-                font-size: 16px;
-            }
-        
-            button {
-                padding: 8px 16px;
-            }
-        }
+/* scanlines overlay */
+body::after {
+  content:'';
+  position:fixed; inset:0; pointer-events:none; z-index:9999;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+}
 
-        @media only screen and (max-width: 1200px) {
-            body {
-                font-size: 18px;
-            }
-        
-            button {
-                padding: 12px 24px;
-            }
-        }
-    </style>
+/* ── HEADER ── */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border2);
+  background: var(--bg1);
+}
+.header-right { display:flex; align-items:center; gap:12px; }
+.clock { color: var(--text2); font-size: 10px; letter-spacing: 1px; }
+.status-dot {
+  width:6px; height:6px; border-radius:50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: blink-dot 2s ease-in-out infinite;
+}
+@keyframes blink-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── TABS ── */
+.tabs {
+  display: flex; gap: 0;
+  border-bottom: 1px solid var(--border2);
+  background: var(--bg1);
+  padding: 0 16px;
+}
+.tab {
+  padding: 8px 18px; cursor: pointer;
+  color: var(--text2); font-family: var(--font); font-size: 11px;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+  user-select: none;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--green); border-bottom-color: var(--green); }
+
+.panel { display:none; padding: 14px 16px; }
+.panel.active { display:block; }
+
+/* ── PROMPT LINE ── */
+.prompt {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--text2); font-size: 11px; margin-bottom: 10px;
+}
+.prompt-sym { color: var(--green); }
+.prompt-path { color: var(--text3); }
+
+/* ── DROP ZONE ── */
+.drop {
+  border: 1px solid var(--border2);
+  padding: 28px 20px; text-align: center;
+  cursor: pointer; position: relative;
+  margin-bottom: 10px; transition: all .15s;
+  background: var(--bg1);
+}
+.drop::before {
+  content: '';
+  position: absolute; inset: 3px;
+  border: 1px dashed var(--dim);
+  pointer-events: none; transition: border-color .15s;
+}
+.drop:hover, .drop.drag {
+  background: #0a0f0a;
+  border-color: var(--green3);
+}
+.drop:hover::before, .drop.drag::before { border-color: var(--green2); }
+.drop input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+.drop-ico { font-size:20px; margin-bottom:6px; filter: grayscale(0.3); }
+.drop h3 { font-size: 11px; color: var(--text); letter-spacing: 1px; margin-bottom:3px; }
+.drop p  { font-size: 10px; color: var(--text3); }
+
+/* ── BUTTONS ── */
+button {
+  background: var(--bg2);
+  border: 1px solid var(--dim);
+  color: var(--text2);
+  font-family: var(--font); font-size: 11px;
+  padding: 5px 12px; cursor: pointer;
+  letter-spacing: .5px;
+  transition: all .12s;
+}
+button:hover:not(:disabled) { border-color: var(--green2); color: var(--green); }
+button.pri { border-color: var(--green2); color: var(--green); }
+button.pri:hover:not(:disabled) { background: var(--green3); }
+button.red { border-color: #400; color: #633; }
+button.red:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+button:disabled { opacity:.25; cursor:default; }
+.brow { display:flex; gap:6px; flex-wrap:wrap; }
+
+/* ── PROGRESS ── */
+.pw { display:none; margin: 8px 0; }
+.pw.on { display:block; }
+.pbg {
+  background: var(--bg2); height:3px;
+  border: 1px solid var(--border2);
+  position: relative; overflow: hidden;
+}
+.pb {
+  background: var(--green); height:100%;
+  width:0; transition:width .08s;
+  box-shadow: 0 0 8px rgba(0,255,65,.4);
+}
+.pl { color: var(--text3); font-size: 10px; margin-top: 4px; letter-spacing: .5px; }
+
+/* ── TERMINAL LOG ── */
+.log {
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  padding: 8px 10px;
+  max-height: 140px; overflow-y: auto;
+  font-size: 11px; line-height: 1.9;
+  margin-top: 10px;
+}
+.log::-webkit-scrollbar { width: 3px; }
+.log::-webkit-scrollbar-thumb { background: var(--dim); }
+.log-line::before { content: '> '; color: var(--text3); }
+.ok   { color: var(--green2); }
+.er   { color: var(--red); }
+.if   { color: #1a6a8a; }
+.wn   { color: var(--amber); }
+
+/* ── BADGE ── */
+.badge {
+  background: #0a120a; border: 1px solid var(--green3);
+  padding: 6px 10px; margin-bottom: 8px; display:none;
+  font-size: 11px;
+}
+.badge.on { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.fn { color: var(--green); } .fs { color: var(--text3); }
+
+/* ── STATS GRID ── */
+.stats4 { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:9px; }
+.stat {
+  background: var(--bg1); border: 1px solid var(--border2);
+  padding: 6px 9px;
+}
+.sl { color: var(--text3); font-size: 9px; letter-spacing: 1.5px; text-transform:uppercase; margin-bottom:2px; }
+.sv { color: var(--green); font-size: 12px; }
+
+/* ── FILE LIST ── */
+.hist-header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom: 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border2);
+}
+.hist-title {
+  color: var(--text3); font-size: 10px;
+  letter-spacing: 2px; text-transform: uppercase;
+}
+.hist-title::before { content: '~/'; color: var(--dim); }
+
+.hist-empty {
+  color: var(--dim); font-size: 11px;
+  text-align: center; padding: 30px;
+  border: 1px solid var(--border2);
+  background: var(--bg1);
+}
+.hist-empty::before { content: '$ ls -la\A'; white-space:pre; color: var(--text3); display:block; margin-bottom:8px; }
+
+.hist-list { border: 1px solid var(--border2); }
+.hist-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 8px; align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border2);
+  transition: background .1s;
+}
+.hist-item:last-child { border-bottom: none; }
+.hist-item:hover { background: #0d0d0d; }
+
+.hi-info { min-width: 0; }
+.hi-name {
+  color: var(--text); font-size: 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 280px;
+}
+.hi-name::before { content: '📄 '; }
+.hi-meta { color: var(--text3); font-size: 10px; margin-top: 2px; }
+.hi-meta span { margin-right: 10px; }
+.hi-meta .mid { color: var(--dim); }
+.hi-status { font-size: 10px; padding: 2px 6px; border: 1px solid; white-space: nowrap; }
+.hi-status.done { color: var(--green2); border-color: var(--green3); }
+.hi-btn { font-size: 10px; padding: 4px 8px; white-space: nowrap; }
+
+.hi-prog { display:none; margin-top:4px; }
+.hi-prog.on { display:block; }
+.hi-pbg { background: var(--bg2); height:2px; }
+.hi-pb  { background: var(--green); height:100%; width:0; transition:width .08s; }
+.hi-pl  { color: var(--text3); font-size: 10px; margin-top:2px; }
+
+
+
+/* ── INPUT ── */
+input[type=text] {
+  background: var(--bg2); border:1px solid var(--dim);
+  color:var(--text); font-family:var(--font); font-size:11px;
+  padding:5px 9px; outline:none; width:100%;
+}
+input:focus { border-color:var(--green2); }
+input::placeholder { color:var(--text3); }
+</style>
 </head>
 <body>
-    <div>
-        <p>Files:</p>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-right">
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="status-dot"></div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" onclick="sw('files')">FILES</div>
+  <div class="tab" onclick="sw('send')">UPLOAD</div>
+</div>
+
+<!-- ═══ FILES ═══ -->
+<div class="panel active" id="tab-files">
+  <div class="prompt">
+    <span class="prompt-sym">$</span>
+    <span class="prompt-path">~/vault/files</span>
+  </div>
+  <div class="hist-header">
+    <span class="hist-title">Storage</span>
+    <div style="display:flex;gap:4px;align-items:center;">
+      <span id="cache-sz" style="color:var(--text3);font-size:10px;cursor:pointer" onclick="showCacheInfo()"></span>
+      <button onclick="clearCache()" style="font-size:10px;padding:3px 7px">🗑 cache</button>
+      <button class="red" onclick="clearHistory()" style="font-size:10px;padding:3px 7px">rm -rf</button>
     </div>
-    <div>
-        <a href="ms-windows-store://home">
-            <button>ms-windows-store://home</button>
-        </a>
+  </div>
+  <div id="hist-list-wrap"></div>
+  <div class="log" id="f-log"><span class="if log-line">ready</span></div>
+</div>
 
-        <a href="SteamSetup.exe">
-            <button>SteamSetup.exe</button>
-        </a>
+<!-- ═══ UPLOAD ═══ -->
+<div class="panel" id="tab-send">
+  <div class="prompt">
+    <span class="prompt-sym">$</span>
+    <span class="prompt-path">~/vault/upload</span>
+  </div>
+  <div class="drop" id="sd">
+    <input type="file" id="sf">
+    <div class="drop-ico">⬡</div>
+    <h3>DROP FILE OR CLICK TO BROWSE</h3>
+    <p>any format · any size · encrypted transfer</p>
+  </div>
 
-        <a href="UadSol.exe">
-            <button>UadSol.exe</button>
-        </a>
+  <div class="badge" id="sb">
+    <span class="fn" id="sfn"></span>
+    <span class="fs" id="sfs"></span>
+  </div>
 
-        <a href="notepad.exe">
-            <button>notepad.exe</button>
-        </a>
+  <div class="stats4" id="ss" style="display:none">
+    <div class="stat"><div class="sl">SIZE</div><div class="sv" id="s1">—</div></div>
+    <div class="stat"><div class="sl">ENCODED</div><div class="sv" id="s2">—</div></div>
+    <div class="stat"><div class="sl">CHUNKS</div><div class="sv" id="s3">—</div></div>
+    <div class="stat"><div class="sl">PER CHUNK</div><div class="sv" id="s4">—</div></div>
+  </div>
 
-        <a href="fake.exe">
-            <button>fake.exe</button>
-        </a>
+  <div class="brow">
+    <button class="pri" id="sbtn" onclick="doSend()" disabled>▲ store</button>
+    <button onclick="clearS()">✕ clear</button>
+  </div>
 
-        <a href="vkpcadmin.exe">
-            <button>vkpcadmin.exe</button>
-        </a>
+  <div class="pw" id="spw"><div class="pbg"><div class="pb" id="spb"></div></div><div class="pl" id="spl"></div></div>
+  <div class="log" id="s-log"><span class="if log-line">ready</span></div>
+</div>
 
-        <a href="kdmapper_Release.exe">
-            <button>kdmapper_Release.exe</button>
-        </a>
-    </div>
+<script>
+
+
+// ── CLOCK ──
+setInterval(()=>{ document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8); },1000);
+document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8);
+
+// ── CONFIG — only Worker URL, no secrets ──
+const WORKER = 'https://black-flower-58e6.artemurg19.workers.dev';
+const BOTS   = [0,1,2,3,4]; // bot indices, actual tokens are in Worker
+const PARALLEL_PER_BOT = 5;
+const PARALLEL = BOTS.length * PARALLEL_PER_BOT;
+
+// ── INDEXEDDB CACHE (no size limit unlike localStorage) ──
+const IDB_NAME = 'telehex', IDB_STORE = 'parts', IDB_VER = 1;
+let _idb = null;
+
+function idbOpen() {
+  if (_idb) return Promise.resolve(_idb);
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VER);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess = e => { _idb = e.target.result; res(_idb); };
+    req.onerror = e => rej(e.target.error);
+  });
+}
+
+async function idbSet(key, value) {
+  try {
+    const db = await idbOpen();
+    return new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => res(true);
+      tx.onerror = e => rej(e.target.error);
+    });
+  } catch(e) { console.warn('idbSet failed:', e); return false; }
+}
+
+async function idbGet(key) {
+  try {
+    const db = await idbOpen();
+    return new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = e => res(e.target.result ?? null);
+      req.onerror = e => rej(e.target.error);
+    });
+  } catch(e) { return null; }
+}
+
+async function idbDel(key) {
+  try {
+    const db = await idbOpen();
+    return new Promise((res) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(key);
+      tx.oncomplete = () => res(true);
+    });
+  } catch(e) { return false; }
+}
+
+// Wipe ALL cached parts (frees disk space)
+async function idbClear() {
+  try {
+    const db = await idbOpen();
+    return new Promise((res) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).clear();
+      tx.oncomplete = () => res(true);
+    });
+  } catch(e) { return false; }
+}
+
+// Get total size of all cached data
+async function idbSize() {
+  try {
+    const db = await idbOpen();
+    return new Promise((res) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).getAll();
+      req.onsuccess = e => {
+        const total = e.target.result.reduce((s,v) => s + (v ? v.length : 0), 0);
+        res(total);
+      };
+      req.onerror = () => res(0);
+    });
+  } catch(e) { return 0; }
+}
+const CHAT  = '-1002111265726';
+const BYTES_PER_FILE = 14 * 1024 * 1024; // 14MB data = ~19MB base64 (under TG 20MB limit)
+
+// ── TABS ──
+function sw(id) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['files','send'][i]===id));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if (id==='files') loadAndRender();
+}
+
+// ── UTILS ──
+const fmtSz = b => b<1024?b+' B':b<1<<20?(b>>10)+' KB':b<1<<30?(b/1048576).toFixed(1)+' MB':(b/1073741824).toFixed(2)+' GB';
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const fmtDate = ts => new Date(ts).toLocaleString();
+
+function lg(id, cls, msg) {
+  const el = document.getElementById(id+'-log');
+  const d = document.createElement('div');
+  d.innerHTML = `<span class="${cls} log-line">${msg}</span>`;
+  el.appendChild(d); el.scrollTop = el.scrollHeight;
+}
+function prg(id, pct, lbl) {
+  document.getElementById(id+'pw').classList.add('on');
+  document.getElementById(id+'pb').style.width = pct+'%';
+  document.getElementById(id+'pl').textContent = lbl;
+}
+
+// ── FIREBASE CATALOG ──
+// Firebase Realtime Database — REST API, no SDK needed
+// Read:  GET  FB_URL  — public, no auth
+// Write: PUT/PATCH FB_URL — open rules, no auth needed
+let _catalog = [];
+
+async function fbRead() {
+  try {
+    const r = await fetch(WORKER + '/catalog/read', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+    const d = await r.json();
+    return d.ok ? (d.data || []) : [];
+  } catch(e) { return []; }
+}
+
+async function fbWrite(entries) {
+  try {
+    const r = await fetch(WORKER + '/catalog/write', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ entries })
+    });
+    const d = await r.json();
+    return d.ok;
+  } catch(e) { return false; }
+}
+
+async function loadAndRender() {
+  const wrap = document.getElementById('hist-list-wrap');
+  wrap.innerHTML = '<div class="hist-empty" style="color:#555;font-size:11px">Loading...</div>';
+  _catalog = await fbRead();
+  renderList(_catalog);
+}
+
+async function addToHistory(entry) {
+  _catalog.unshift(entry);
+  await fbWrite(_catalog);
+}
+
+async function removeFromHistory(id) {
+  const entry = _catalog.find(e => e.id === id);
+  if (!entry || !confirm('Delete from catalog?')) return;
+  for(let i=0;i<(entry.parts||0);i++) idbDel(`th_${entry.startId}_${i}`);
+  _catalog = _catalog.filter(e => e.id !== id);
+  await fbWrite(_catalog);
+  renderList(_catalog);
+}
+
+async function clearHistory() {
+  if (!confirm('Delete ALL files from catalog?')) return;
+  _catalog = [];
+  await fbWrite([]);
+  renderList([]);
+}
+
+function renderList(entries) {
+  const wrap = document.getElementById('hist-list-wrap');
+  if (!entries.length) {
+    wrap.innerHTML = '<div class="hist-empty">No files yet. Go to ▲ Upload to send files.</div>';
+    return;
+  }
+  wrap.innerHTML = '';
+  const list = document.createElement('div');
+  list.className = 'hist-list';
+  entries.forEach(entry => {
+    const item = document.createElement('div');
+    item.className = 'hist-item';
+    item.style.gridTemplateColumns = '1fr auto auto auto';
+    item.id = 'hi-' + entry.id;
+    item.innerHTML = `
+      <div class="hi-info">
+        <div class="hi-name" title="${esc(entry.name)}">${esc(entry.name)}</div>
+        <div class="hi-meta">
+          <span>${fmtSz(entry.size)}</span>
+          <span>${entry.parts} part(s)</span>
+          <span class="mid">ID:${entry.startId}</span>
+          <span>${fmtDate(entry.ts)}</span>
+        </div>
+        <div class="hi-prog" id="hp-${entry.id}">
+          <div class="hi-pbg"><div class="hi-pb" id="hpb-${entry.id}"></div></div>
+          <div class="hi-pl" id="hpl-${entry.id}"></div>
+        </div>
+      </div>
+      <div class="hi-status done">✓</div>
+      <button class="hi-btn pri" onclick="downloadEntry('${entry.id}')">▼ Download</button>
+      <button class="hi-btn red" onclick="removeFromHistory('${entry.id}')">✕</button>
+    `;
+    list.appendChild(item);
+  });
+  wrap.appendChild(list);
+}
+
+function setEntryPrg(id, pct, lbl) {
+  const pw = document.getElementById('hp-'+id);
+  const pb = document.getElementById('hpb-'+id);
+  const pl = document.getElementById('hpl-'+id);
+  if (!pw) return;
+  pw.classList.add('on');
+  pb.style.width = pct+'%';
+  pl.textContent = lbl;
+}
+
+// ── TELEGRAM ──
+async function tgJSON(method, body, botIndex=0) {
+  // All Telegram calls go through Worker — no tokens in browser
+  const endpoint = method === 'sendMessage' ? '/send-msg'
+                 : method === 'sendDocument' ? '/send-doc'
+                 : '/send-msg'; // fallback
+  for (let t=0; t<5; t++) {
+    try {
+      const r = await fetch(WORKER + endpoint, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({...body, bot_index: botIndex})
+      });
+      const d = await r.json();
+      if (d.ok) return d;
+      if (d.error_code===429) await sleep(((d.parameters?.retry_after||3)+1)*1000);
+      else return d;
+    } catch(e) { await sleep(1000); }
+  }
+  return {ok:false, description:'max retries'};
+}
+
+async function tgSendDoc(chatId, filename, b64str, caption, botIndex=0) {
+  for (let t=0; t<5; t++) {
+    try {
+      const r = await fetch(WORKER + '/send-doc', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ filename, content_b64: b64str, caption, bot_index: botIndex })
+      });
+      const d = await r.json();
+      if (d.ok) return d;
+      if (d.error_code===429) { await sleep(((d.parameters?.retry_after||3)+1)*1000); }
+      else return d;
+    } catch(e) { await sleep(1000); }
+  }
+  return {ok:false, description:'max retries'};
+}
+
+async function fwdRead(chatId, msgId) {
+  const r = await tgJSON('forwardMessage',{chat_id:chatId,from_chat_id:chatId,message_id:msgId});
+  if (!r.ok) return null;
+  tgJSON('deleteMessage',{chat_id:chatId,message_id:r.result.message_id});
+  return r.result;
+}
+
+async function downloadTgFile(fileId, startId, partIdx) {
+  // 1. Check IndexedDB cache (stores Uint8Array)
+  const cacheKey = `th_${startId}_${partIdx}`;
+  const cached = await idbGet(cacheKey);
+  if (cached) {
+    lgAny('ok', `Part ${partIdx+1}: cache hit`);
+    return cached; // Uint8Array
+  }
+
+  // 2. Download via Worker — returns raw binary bytes
+  lgAny('if', `Part ${partIdx+1}: fetching...`);
+  try {
+    const resp = await fetch(WORKER + '/get-file', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ file_id: fileId })
+    });
+    if (!resp.ok) { lgAny('er', `Worker HTTP ${resp.status}`); return null; }
+    const buf = await resp.arrayBuffer();
+    if (!buf || buf.byteLength < 10) { lgAny('er', 'Empty response'); return null; }
+    const bytes = new Uint8Array(buf);
+    // Cache for next time (only small files to save disk space)
+    if (buf.byteLength < 50 * 1024 * 1024) idbSet(cacheKey, bytes);
+    lgAny('ok', `Part ${partIdx+1}: ok (${(buf.byteLength/1024/1024).toFixed(1)} MB)`);
+    return bytes; // Uint8Array
+  } catch(e) {
+    lgAny('er', `Fetch error: ${e.message}`);
+    return null;
+  }
+}
+
+// Log to whichever log panel is visible
+function lgAny(cls, msg) {
+  const id = document.getElementById('tab-files').classList.contains('active') ? 'f' : 'r';
+  lg(id, cls, msg);
+}
+
+// ── SEND ──
+let sFile = null;
+
+const sdEl = document.getElementById('sd');
+sdEl.addEventListener('dragover', e=>{e.preventDefault();sdEl.classList.add('drag');});
+sdEl.addEventListener('dragleave', ()=>sdEl.classList.remove('drag'));
+sdEl.addEventListener('drop', e=>{e.preventDefault();sdEl.classList.remove('drag');if(e.dataTransfer.files[0])setF(e.dataTransfer.files[0]);});
+document.getElementById('sf').addEventListener('change', e=>{if(e.target.files[0])setF(e.target.files[0]);});
+
+function setF(f) {
+  sFile=f;
+  document.getElementById('sb').classList.add('on');
+  document.getElementById('sfn').textContent=f.name;
+  document.getElementById('sfs').textContent=fmtSz(f.size);
+  document.getElementById('sbtn').disabled=false;
+  const nf=Math.ceil(f.size/BYTES_PER_FILE);
+  document.getElementById('ss').style.display='grid';
+  document.getElementById('s1').textContent=fmtSz(f.size);
+  document.getElementById('s2').textContent=fmtSz(f.size*2) + ' hex';
+  document.getElementById('s3').textContent=nf;
+  document.getElementById('s4').textContent=fmtSz(Math.min(BYTES_PER_FILE,f.size)*2);
+}
+
+function clearS() {
+  sFile=null;
+  document.getElementById('sb').classList.remove('on');
+  document.getElementById('ss').style.display='none';
+  document.getElementById('sbtn').disabled=true;
+  document.getElementById('spw').classList.remove('on');
+  document.getElementById('sf').value='';
+  document.getElementById('s-log').innerHTML='<span class="if">cleared</span>';
+}
+
+async function doSend() {
+  if (!sFile) {lg('s','er','No file');return;}
+  const btn=document.getElementById('sbtn');
+  btn.disabled=true;
+
+  const total=sFile.size;
+  const numFiles=Math.ceil(total/BYTES_PER_FILE);
+  lg('s','if',`${sFile.name} | ${fmtSz(total)} | ${numFiles} part(s)`);
+
+  // Header
+  prg('s',0,'Sending header...');
+  const hdr={v:'2',n:sFile.name,s:total,tf:numFiles};
+  const hr=await tgJSON('sendMessage',{
+    chat_id: null, text:'VAULTX_HDR\n'+JSON.stringify(hdr), disable_notification:true
+  });
+  if (!hr.ok){lg('s','er','Init failed: '+hr.description);btn.disabled=false;return;}
+  const startId=hr.result.message_id;
+  lg('s','ok',`Header sent. Start Msg ID = ${startId}`);
+
+  const t0=Date.now(); let sent=0;
+  const fileIds=new Array(numFiles).fill(null);
+
+  // Helper: read file slice → Uint8Array
+  const readSlice = (s,e) => new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onload=ev=>res(new Uint8Array(ev.target.result));
+    fr.onerror=rej;
+    fr.readAsArrayBuffer(sFile.slice(s,e));
+  });
+
+  // Helper: bytes → base64 string (native btoa — 10x faster than hex)
+  const toB64 = buf => {
+    // btoa needs binary string
+    let bin = '';
+    const chunk = 32768;
+    for(let i=0;i<buf.length;i+=chunk)
+      bin += String.fromCharCode.apply(null, buf.subarray(i, i+chunk));
+    return btoa(bin);
+  };
+
+  // ── MEMORY-SAFE MULTI-BOT UPLOAD ──
+  // Peak RAM = 1 chunk raw (4MB) + 1 chunk hex (8MB) + PARALLEL in-flight Blobs
+  // Blobs handed to fetch can be GC'd by browser once streaming starts
+  // Strictly sequential read+convert, parallel HTTP uploads
+
+  const botActive=BOTS.map(()=>0), botQueue=BOTS.map(()=>[]);
+  const botSem=b=>new Promise(r=>{if(botActive[b]<PARALLEL_PER_BOT){botActive[b]++;r();}else botQueue[b].push(r);});
+  const botRel=b=>{botActive[b]--;if(botQueue[b].length){botActive[b]++;botQueue[b].shift()();}};
+  const pickBot=()=>{let b=0;for(let i=1;i<BOTS.length;i++)if(botActive[i]<botActive[b])b=i;return b;};
+  lg('s','if',`Uploading ${numFiles} chunk(s) via ${PARALLEL} parallel streams`);
+
+  // Track in-flight upload promises so we can await all at the end
+  const inFlight = [];
+
+  for(let i=0;i<numFiles;i++){
+    const s=i*BYTES_PER_FILE, e=Math.min(s+BYTES_PER_FILE,total);
+
+    // ── Step 1: read raw bytes ──
+    const buf = await readSlice(s, e);
+
+    // ── Step 2: encode to base64 (native btoa — 33% overhead vs 100% hex) ──
+    const b64 = toB64(buf);
+    // buf no longer needed
+    // Only cache small files locally (large files waste disk space)
+    if(total < 100*1024*1024) idbSet(`th_${startId}_${i}`, b64);
+
+    // ── Step 3: wait for a bot slot, then launch upload ──
+    const b = pickBot();
+    await botSem(b);
+
+    const p = (async(idx, data, bi) => {
+      try {
+        const r = await tgSendDoc(
+          null,
+          `chunk_${idx+1}_of_${numFiles}.b64`,
+          data,
+          `VAULTX_PART ${idx+1}/${numFiles}`,
+          bi
+        );
+        if(!r.ok) {
+          lg('s','er',`Part ${idx+1} failed: ${r.description}`);
+        } else {
+          fileIds[idx] = r.result.document.file_id;
+          sent++;
+          const spd = fmtSz(Math.round((sent*BYTES_PER_FILE)/((Date.now()-t0)/1000||0.001)));
+          prg('s', 5+Math.round((sent/numFiles)*88), `${sent}/${numFiles} — ${spd}/s`);
+          if(sent===1||sent%5===0||sent===numFiles)
+            lg('s','ok',`Part ${idx+1}/${numFiles} ok`);
+        }
+      } finally { botRel(bi); }
+    })(i, b64, b);
+
+    inFlight.push(p);
+    if(i % 5 === 4) await sleep(0); // yield for GC
+  }
+
+  // Wait for all uploads to complete
+  await Promise.all(inFlight);
+
+  // Footer
+  await tgJSON('sendMessage',{
+    chat_id: null,
+    text:`VAULTX_END start:${startId} parts:${numFiles} name:${sFile.name}`,
+    disable_notification:true
+  });
+
+  // Save to Firebase catalog (shared for all users)
+  prg('s',94,'Saving...');
+  await addToHistory({
+    id: String(startId),
+    startId,
+    name: sFile.name,
+    size: total,
+    parts: numFiles,
+    fileIds,
+    ts: Date.now()
+  });
+  lg('s','ok','Index updated');
+
+  const elapsed=((Date.now()-t0)/1000).toFixed(1);
+  prg('s',100,'Done!');
+  lg('s','ok',`✅ Done in ${elapsed}s. File saved to history.`);
+  lg('s','ok',`📌 Switch to 📁 Files tab to download it anytime.`);
+  btn.disabled=false;
+
+  // Auto-switch to files tab
+  setTimeout(()=>sw('files'), 1200);
+}
+
+// ── DOWNLOAD (restore) ──
+let downloading = new Set();
+
+async function downloadEntry(entryId) {
+  if (downloading.has(entryId)) return;
+  downloading.add(entryId);
+
+  const entry = _catalog.find(e=>e.id===String(entryId));
+  if (!entry){lg('f','er','Entry not found');downloading.delete(entryId);return;}
+
+  const {startId, name, size, parts, fileIds} = entry;
+  lg('f','if',`Restoring: ${name} (${fmtSz(size)}, ${parts} part(s))...`);
+
+  if (!fileIds || !fileIds.every(Boolean)) {
+    lg('f','er','Chunk index missing — re-upload');
+    downloading.delete(entryId); return;
+  }
+  const t0 = Date.now();
+  let done = 0;
+
+  // Decode chunk: auto-detects base64 or hex format
+  const decodeChunk = rawBytes => {
+    let str;
+    if (typeof rawBytes === 'string') {
+      str = rawBytes.trim().replace(/\s/g,'');
+    } else {
+      const buf = rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes);
+      str = new TextDecoder().decode(buf).trim().replace(/\s/g,'');
+    }
+    const isHex = str.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(str);
+    if (isHex) {
+      const bytes = new Uint8Array(str.length >> 1);
+      const lut = new Uint8Array(103);
+      for(let i=0;i<10;i++) lut[48+i]=i;
+      for(let i=0;i<6;i++){lut[65+i]=10+i; lut[97+i]=10+i;}
+      for(let i=0;i<bytes.length;i++)
+        bytes[i]=(lut[str.charCodeAt(i*2)]<<4)|lut[str.charCodeAt(i*2+1)];
+      return bytes;
+    } else {
+      const bin = atob(str);
+      const out = new Uint8Array(bin.length);
+      for(let j=0;j<bin.length;j++) out[j]=bin.charCodeAt(j);
+      return out;
+    }
+  };
+
+  // ── Streaming download via StreamSaver.js ──
+  // Writes directly to disk — RAM stays constant regardless of file size
+  // Pre-fetch next part while writing current (pipeline)
+  try {
+    const streamSaver = window.streamSaver;
+    const fileStream = streamSaver.createWriteStream(name, {size});
+    const writer = fileStream.getWriter();
+
+    // Pre-fetch buffer: download next part while writing current
+    let prefetched = downloadTgFile(fileIds[0], startId, 0);
+
+    for(let i=0;i<parts;i++){
+      // Wait for current part (already prefetching)
+      const data = await prefetched;
+      if(!data){
+        writer.abort();
+        lg('f','er',`Part ${i+1} failed`);
+        downloading.delete(entryId);
+        return;
+      }
+
+      // Start prefetching next part immediately
+      if(i+1 < parts) prefetched = downloadTgFile(fileIds[i+1], startId, i+1);
+
+      // Decode and write to disk (not to RAM)
+      const bytes = decodeChunk(data);
+      await writer.write(bytes);
+      // bytes goes out of scope — GC can free it
+
+      done++;
+      const spd = fmtSz(Math.round((done*BYTES_PER_FILE)/((Date.now()-t0)/1000||0.001)));
+      setEntryPrg(entryId, Math.round((done/parts)*95), `${done}/${parts} — ${spd}/s`);
+      lg('f','ok',`Part ${done}/${parts} ok`);
+    }
+
+    await writer.close();
+  } catch(e) {
+    lg('f','er','Stream error: '+e.message);
+    downloading.delete(entryId);
+    return;
+  }
+
+  setEntryPrg(entryId, 100, 'Done!');
+  lg('f','ok',`Done: ${name} (${fmtSz(size)}) in ${((Date.now()-t0)/1000).toFixed(1)}s`);
+  downloading.delete(entryId);
+}
+
+// ── HEX VIEWER ──
+const COLS=16,ROWH=19,OVER=12,VC=256*1024,VCM=20;
+let vF=null,vSz=0,vTR=0,vCa=new Map(),vCO=[],vRS=-1,vRE=-1,vRA=false;
+
+
+
+function vI(f){
+  vF=f;vSz=f.size;vCa.clear();vCO=[];vTR=Math.ceil(vSz/COLS);vRS=vRE=-1;
+  document.getElementById('vsz').textContent=fmtSz(vSz);
+  document.getElementById('vrw').textContent=vTR.toLocaleString();
+  document.getElementById('vi').style.display='block';
+  document.getElementById('vin').style.height=(vTR*ROWH)+'px';
+  const sc=document.getElementById('vsc');
+  sc.scrollTop=0;
+  sc.onscroll=()=>{if(!vRA){vRA=true;requestAnimationFrame(async()=>{await vR();vRA=false;});}};
+  requestAnimationFrame(()=>requestAnimationFrame(async()=>await vR()));
+}
+
+async function vRd(s,l){
+  const out=new Uint8Array(l);let w=0,c=s;
+  while(w<l&&c<vSz){
+    const ci=Math.floor(c/VC);
+    if(!vCa.has(ci)){
+      const b=await vF.slice(ci*VC,Math.min((ci+1)*VC,vSz)).arrayBuffer();
+      if(vCO.length>=VCM)vCa.delete(vCO.shift());
+      vCa.set(ci,new Uint8Array(b));vCO.push(ci);
+    }
+    const ch=vCa.get(ci),off=c-ci*VC,n=Math.min(l-w,ch.length-off,vSz-c);
+    out.set(ch.subarray(off,off+n),w);w+=n;c+=n;
+  }
+  return out.subarray(0,w);
+}
+
+async function vR(){
+  if(!vF)return;
+  const sc=document.getElementById('vsc');
+  const top=sc.scrollTop,vh=sc.clientHeight||400;
+  const sr=Math.max(0,Math.floor(top/ROWH)-OVER);
+  const er=Math.min(vTR,sr+Math.ceil(vh/ROWH)+OVER*2);
+  if(sr===vRS&&er===vRE)return;
+  vRS=sr;vRE=er;
+  const sb=sr*COLS,eb=Math.min(er*COLS,vSz);
+  const bytes=await vRd(sb,eb-sb);
+  const rr=document.getElementById('vrr');
+  rr.style.transform=`translateY(${sr*ROWH}px)`;
+  const fr=document.createDocumentFragment();
+  for(let row=sr;row<er;row++){
+    const rs=(row-sr)*COLS,rb=bytes.subarray(rs,Math.min(rs+COLS,bytes.length));
+    if(!rb.length)break;
+    const div=document.createElement('div');div.className='hrow';
+    const a=document.createElement('span');a.className='ha';
+    a.textContent=(row*COLS).toString(16).toUpperCase().padStart(8,'0');div.appendChild(a);
+    const hx=document.createElement('span');hx.className='hh';
+    let ht='';
+    for(let i=0;i<COLS;i++){
+      if(i===8)ht+=' ';
+      if(i<rb.length){const v=rb[i];const c=v===0?'hz':v===0xFF?'hf':(v>=32&&v<127)?'hp':'';ht+=`<span class="${c}">${v.toString(16).padStart(2,'0').toUpperCase()}</span> `;}
+      else ht+='   ';
+    }
+    hx.innerHTML=ht;div.appendChild(hx);
+    const ac=document.createElement('span');ac.className='hasc';
+    let at='';for(let i=0;i<rb.length;i++){const v=rb[i];at+=(v>=32&&v<127)?String.fromCharCode(v):'·';}
+    ac.textContent=at;div.appendChild(ac);fr.appendChild(div);
+  }
+  rr.innerHTML='';rr.appendChild(fr);
+}
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ── CACHE MANAGEMENT ──
+async function showCacheInfo() {
+  const sz = await idbSize();
+  lg('f','if',`Local cache: ${fmtSz(sz)} — click 🗑 Cache to free this space`);
+}
+
+async function clearCache() {
+  const sz = await idbSize();
+  if(!sz){ lg('f','if','Cache is already empty'); return; }
+  if(!confirm(`Clear ${fmtSz(sz)} of cached file data?`)) return;
+  await idbClear();
+  lg('f','ok','Cache cleared — disk space freed');
+  updateCacheSize();
+}
+
+async function updateCacheSize() {
+  const sz = await idbSize();
+  const el = document.getElementById('cache-sz');
+  if(el) el.textContent = sz > 0 ? fmtSz(sz) : '';
+}
+
+// ── INIT ──
+loadAndRender();
+updateCacheSize();
+
+</script>
 </body>
 </html>

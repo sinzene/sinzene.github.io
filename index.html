@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>vault</title>
+<title>Storage</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
 <style>
@@ -164,19 +164,6 @@ button:disabled { opacity:.25; cursor:default; }
 .hi-pb  { background:var(--green); height:100%; width:0; transition:width .08s; }
 .hi-pl  { color:var(--text3); font-size:10px; margin-top:2px; }
 
-/* HEX VIEWER */
-.hex-out { border:1px solid var(--b2); margin-top:9px; }
-.hex-hdr { background:var(--bg1); padding:4px 9px; border-bottom:1px solid var(--b2); font-size:10px; color:var(--text3); letter-spacing:1px; }
-.hex-sc  { max-height:300px; overflow:auto; position:relative; }
-.hex-sc::-webkit-scrollbar { width:4px; height:4px; }
-.hex-sc::-webkit-scrollbar-thumb { background:var(--dim); }
-.hex-in  { position:relative; }
-.hex-rr  { position:absolute; top:0; left:0; right:0; }
-.hrow    { display:grid; grid-template-columns:80px 1fr auto; padding:1px 9px; border-bottom:1px solid var(--bg2); font-size:12px; white-space:nowrap; line-height:19px; }
-.hrow:hover { background:var(--bg1); }
-.ha { color:var(--dim); } .hh { color:#555; letter-spacing:1px; }
-.hasc { color:var(--text3); letter-spacing:2px; padding-left:8px; border-left:1px solid var(--b2); }
-.hz { color:var(--bg2); } .hf { color:#885500; } .hp { color:var(--green2); }
 
 input[type=text] { background:var(--bg2); border:1px solid var(--dim); color:var(--text); font-family:var(--font); font-size:11px; padding:5px 9px; outline:none; width:100%; }
 input:focus { border-color:var(--green2); }
@@ -195,12 +182,11 @@ input::placeholder { color:var(--text3); }
 <div class="tabs">
   <div class="tab active" onclick="sw('files')">FILES</div>
   <div class="tab" onclick="sw('send')">UPLOAD</div>
-  <div class="tab" onclick="sw('view')">HEX</div>
 </div>
 
 <!-- FILES -->
 <div class="panel active" id="tab-files">
-  <div class="prompt"><span class="prompt-sym">$</span><span class="prompt-path">~/vault/files</span></div>
+  <div class="prompt"><span class="prompt-sym">$</span><span class="prompt-path">~/storage/files</span></div>
   <div class="hist-header">
     <span class="hist-title">storage</span>
     <div style="display:flex;gap:4px;align-items:center;">
@@ -215,7 +201,7 @@ input::placeholder { color:var(--text3); }
 
 <!-- UPLOAD -->
 <div class="panel" id="tab-send">
-  <div class="prompt"><span class="prompt-sym">$</span><span class="prompt-path">~/vault/upload</span></div>
+  <div class="prompt"><span class="prompt-sym">$</span><span class="prompt-path">~/storage/upload</span></div>
   <div class="drop" id="sd">
     <input type="file" id="sf">
     <div class="drop-ico">⬡</div>
@@ -235,29 +221,6 @@ input::placeholder { color:var(--text3); }
   </div>
   <div class="pw" id="spw"><div class="pbg"><div class="pb" id="spb"></div></div><div class="pl" id="spl"></div></div>
   <div class="log" id="s-log"><span class="if">ready</span></div>
-</div>
-
-<!-- HEX -->
-<div class="panel" id="tab-view">
-  <div class="prompt"><span class="prompt-sym">$</span><span class="prompt-path">~/vault/hexdump</span></div>
-  <div class="drop" id="vd">
-    <input type="file" id="vf">
-    <div class="drop-ico">⬡</div>
-    <h3>DROP FILE TO INSPECT</h3>
-    <p>virtual scroll · unlimited size</p>
-  </div>
-  <div id="vi" style="display:none">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:8px 0">
-      <div class="stat"><div class="sl">SIZE</div><div class="sv" id="vsz">—</div></div>
-      <div class="stat"><div class="sl">ROWS</div><div class="sv" id="vrw">—</div></div>
-    </div>
-    <div class="hex-out">
-      <div class="hex-hdr">OFFSET &nbsp;&nbsp; 00 01 02 03 04 05 06 07  08 09 0A 0B 0C 0D 0E 0F &nbsp; ASCII</div>
-      <div class="hex-sc" id="vsc">
-        <div class="hex-in" id="vin"><div class="hex-rr" id="vrr"></div></div>
-      </div>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -352,7 +315,7 @@ const PARALLEL_PER_BOT = 4;
 const PARALLEL = BOTS.length * PARALLEL_PER_BOT;
 // ── TABS ──
 function sw(id) {
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['files','send','view'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['files','send'][i]===id));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   if (id==='files') loadAndRender();
@@ -683,6 +646,7 @@ async function doSend() {
 
   const elapsed=((Date.now()-t0)/1000).toFixed(1);
   prg('s',100,'Done!');
+  localStorage.setItem('th_last_upload', Date.now());
   lg('s','ok',`✅ Done in ${elapsed}s.`);
   // lg('s','ok',`📌 Switch to 📁 Files tab to download it anytime.`);
   btn.disabled=false;
@@ -744,78 +708,27 @@ async function downloadEntry(entryId) {
   setEntryPrg(entryId,100,'Done!');
   lg('f','ok',`✅ ${name} (${fmtSz(size)}) in ${((Date.now()-t0)/1000).toFixed(1)}s`);
   downloading.delete(entryId);
-}
+  // Auto-delete cache for this entry after download (free disk space)
+  for(let i=0;i<parts;i++) idbDel(`th_${startId}_${i}`);
+  updateCacheSize();
 
-// ── HEX VIEWER ──
-const COLS=16,ROWH=19,OVER=12,VC=256*1024,VCM=20;
-let vF=null,vSz=0,vTR=0,vCa=new Map(),vCO=[],vRS=-1,vRE=-1,vRA=false;
-
-const vdEl=document.getElementById('vd');
-vdEl.addEventListener('dragover',e=>{e.preventDefault();vdEl.classList.add('drag');});
-vdEl.addEventListener('dragleave',()=>vdEl.classList.remove('drag'));
-vdEl.addEventListener('drop',e=>{e.preventDefault();vdEl.classList.remove('drag');if(e.dataTransfer.files[0])vI(e.dataTransfer.files[0]);});
-document.getElementById('vf').addEventListener('change',e=>{if(e.target.files[0])vI(e.target.files[0]);});
-
-function vI(f){
-  vF=f;vSz=f.size;vCa.clear();vCO=[];vTR=Math.ceil(vSz/COLS);vRS=vRE=-1;
-  document.getElementById('vsz').textContent=fmtSz(vSz);
-  document.getElementById('vrw').textContent=vTR.toLocaleString();
-  document.getElementById('vi').style.display='block';
-  document.getElementById('vin').style.height=(vTR*ROWH)+'px';
-  const sc=document.getElementById('vsc');
-  sc.scrollTop=0;
-  sc.onscroll=()=>{if(!vRA){vRA=true;requestAnimationFrame(async()=>{await vR();vRA=false;});}};
-  requestAnimationFrame(()=>requestAnimationFrame(async()=>await vR()));
-}
-
-async function vRd(s,l){
-  const out=new Uint8Array(l);let w=0,c=s;
-  while(w<l&&c<vSz){
-    const ci=Math.floor(c/VC);
-    if(!vCa.has(ci)){
-      const b=await vF.slice(ci*VC,Math.min((ci+1)*VC,vSz)).arrayBuffer();
-      if(vCO.length>=VCM)vCa.delete(vCO.shift());
-      vCa.set(ci,new Uint8Array(b));vCO.push(ci);
+// Auto-clear stale cache on startup (older than 24h)
+(async () => {
+  const lastUpload = parseInt(localStorage.getItem('th_last_upload') || '0');
+  const age = Date.now() - lastUpload;
+  if (lastUpload && age > 24 * 60 * 60 * 1000) {
+    const sz = await idbSize();
+    if (sz > 0) {
+      await idbClear();
+      localStorage.removeItem('th_last_upload');
+      updateCacheSize();
+      console.log('Auto-cleared stale cache:', sz, 'bytes');
     }
-    const ch=vCa.get(ci),off=c-ci*VC,n=Math.min(l-w,ch.length-off,vSz-c);
-    out.set(ch.subarray(off,off+n),w);w+=n;c+=n;
   }
-  return out.subarray(0,w);
+})();
 }
 
-async function vR(){
-  if(!vF)return;
-  const sc=document.getElementById('vsc');
-  const top=sc.scrollTop,vh=sc.clientHeight||400;
-  const sr=Math.max(0,Math.floor(top/ROWH)-OVER);
-  const er=Math.min(vTR,sr+Math.ceil(vh/ROWH)+OVER*2);
-  if(sr===vRS&&er===vRE)return;
-  vRS=sr;vRE=er;
-  const sb=sr*COLS,eb=Math.min(er*COLS,vSz);
-  const bytes=await vRd(sb,eb-sb);
-  const rr=document.getElementById('vrr');
-  rr.style.transform=`translateY(${sr*ROWH}px)`;
-  const fr=document.createDocumentFragment();
-  for(let row=sr;row<er;row++){
-    const rs=(row-sr)*COLS,rb=bytes.subarray(rs,Math.min(rs+COLS,bytes.length));
-    if(!rb.length)break;
-    const div=document.createElement('div');div.className='hrow';
-    const a=document.createElement('span');a.className='ha';
-    a.textContent=(row*COLS).toString(16).toUpperCase().padStart(8,'0');div.appendChild(a);
-    const hx=document.createElement('span');hx.className='hh';
-    let ht='';
-    for(let i=0;i<COLS;i++){
-      if(i===8)ht+=' ';
-      if(i<rb.length){const v=rb[i];const c=v===0?'hz':v===0xFF?'hf':(v>=32&&v<127)?'hp':'';ht+=`<span class="${c}">${v.toString(16).padStart(2,'0').toUpperCase()}</span> `;}
-      else ht+='   ';
-    }
-    hx.innerHTML=ht;div.appendChild(hx);
-    const ac=document.createElement('span');ac.className='hasc';
-    let at='';for(let i=0;i<rb.length;i++){const v=rb[i];at+=(v>=32&&v<127)?String.fromCharCode(v):'·';}
-    ac.textContent=at;div.appendChild(ac);fr.appendChild(div);
-  }
-  rr.innerHTML='';rr.appendChild(fr);
-}
+
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
